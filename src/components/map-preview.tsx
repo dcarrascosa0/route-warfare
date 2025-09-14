@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MapPin, Navigation, Target, Activity } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const MapPreview = () => {
   return (
@@ -64,9 +65,11 @@ const MapPreview = () => {
                   </div>
                   
                   <div className="absolute bottom-4 right-4">
-                    <Button size="sm" className="bg-primary/20 hover:bg-primary/30">
-                      <Navigation className="w-4 h-4 mr-2" />
-                      Start Route
+                    <Button size="sm" className="bg-primary/20 hover:bg-primary/30" asChild>
+                      <Link to="/routes">
+                        <Navigation className="w-4 h-4 mr-2" />
+                        Start Route
+                      </Link>
                     </Button>
                   </div>
                 </div>

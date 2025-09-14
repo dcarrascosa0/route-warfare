@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Trophy, Users, Zap } from "lucide-react";
+import { Link } from "react-router-dom";
 import heroMapImage from "@/assets/hero-map.jpg";
 
 const HeroSection = () => {
@@ -35,12 +36,16 @@ const HeroSection = () => {
         </p>
         
         <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-          <Button size="lg" className="bg-gradient-hero hover:shadow-glow transition-all duration-300">
-            <MapPin className="w-5 h-5 mr-2" />
-            Start Claiming Territory
+          <Button size="lg" className="bg-gradient-hero hover:shadow-glow transition-all duration-300" asChild>
+            <Link to="/territory">
+              <MapPin className="w-5 h-5 mr-2" />
+              View Territory Map
+            </Link>
           </Button>
-          <Button variant="outline" size="lg" className="border-primary/30 hover:bg-primary/10">
-            View Leaderboard
+          <Button variant="outline" size="lg" className="border-primary/30 hover:bg-primary/10" asChild>
+            <Link to="/leaderboard">
+              View Leaderboard
+            </Link>
           </Button>
         </div>
         
