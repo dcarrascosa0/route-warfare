@@ -47,6 +47,12 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Route Wars Custom Colors
+        territory: {
+          claimed: "hsl(var(--territory-claimed))",
+          neutral: "hsl(var(--territory-neutral))",
+          contested: "hsl(var(--territory-contested))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
@@ -62,6 +68,15 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      backgroundImage: {
+        'gradient-hero': 'var(--gradient-hero)',
+        'gradient-map': 'var(--gradient-map)',
+        'gradient-zone': 'var(--gradient-zone)',
+      },
+      boxShadow: {
+        'glow': 'var(--shadow-glow)',
+        'territory': 'var(--shadow-territory)',
       },
       keyframes: {
         "accordion-down": {
