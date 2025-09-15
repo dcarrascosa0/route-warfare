@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import TerritoryDetailsModal from "@/components/territory-details-modal";
+import { toast } from "sonner";
 import { 
   MapPin, 
   Navigation, 
@@ -15,10 +17,25 @@ import {
 
 const Territory = () => {
   const [selectedTerritory, setSelectedTerritory] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     document.title = "Territory Map - Route Wars";
   }, []);
+
+  const handleTerritoryClick = (territoryId: string) => {
+    setSelectedTerritory(territoryId);
+    setIsModalOpen(true);
+    toast("Territory selected", { description: "View details and plan your strategy" });
+  };
+
+  const handlePlanRoute = () => {
+    toast("Route planner opened", { description: "Select your starting point and destination" });
+  };
+
+  const handleLiveView = () => {
+    toast("Live GPS activated", { description: "Real-time territory updates enabled" });
+  };
 
   const territories = [
     { 
@@ -128,7 +145,7 @@ const Territory = () => {
                           className={`cursor-pointer transition-all duration-300 ${
                             selectedTerritory === territory.id ? 'drop-shadow-territory' : 'hover:brightness-110'
                           }`}
-                          onClick={() => setSelectedTerritory(territory.id)}
+                          onClick={() => handleTerritoryClick(territory.id)}
                         />
                         <circle
                           cx={territory.center.x}
@@ -136,7 +153,7 @@ const Territory = () => {
                           r="8"
                           fill={`hsl(var(--${territory.color}))`}
                           className="cursor-pointer"
-                          onClick={() => setSelectedTerritory(territory.id)}
+                          onClick={() => handleTerritoryClick(territory.id)}
                         >
                           <animate
                             attributeName="r"
@@ -195,11 +212,11 @@ const Territory = () => {
 
                   {/* Control buttons */}
                   <div className="absolute bottom-4 left-4 flex gap-2">
-                    <Button size="sm" className="bg-primary/20 hover:bg-primary/30">
+                    <Button size="sm" className="bg-primary/20 hover:bg-primary/30" onClick={handlePlanRoute}>
                       <Navigation className="w-4 h-4 mr-2" />
                       Plan Route
                     </Button>
-                    <Button size="sm" variant="outline" className="border-muted/30">
+                    <Button size="sm" variant="outline" className="border-muted/30" onClick={handleLiveView}>
                       <Activity className="w-4 h-4 mr-2" />
                       Live View
                     </Button>
@@ -296,6 +313,12 @@ const Territory = () => {
           </div>
         </div>
       </main>
+      
+      <TerritoryDetailsModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        territory={territories.find(t => t.id === selectedTerritory) || null}
+      />
     </div>
   );
 };
