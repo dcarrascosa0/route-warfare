@@ -21,12 +21,60 @@ const Territory = () => {
   }, []);
 
   const territories = [
-    { id: "1", owner: "You", area: "2.4 km²", status: "claimed", color: "territory-claimed", position: { top: "20%", left: "30%" } },
-    { id: "2", owner: "Alex_Runner", area: "1.8 km²", status: "enemy", color: "destructive", position: { top: "40%", left: "60%" } },
-    { id: "3", owner: "FastTracker", area: "3.1 km²", status: "enemy", color: "destructive", position: { top: "60%", left: "20%" } },
-    { id: "4", owner: "Unknown", area: "0.9 km²", status: "neutral", color: "territory-neutral", position: { top: "30%", left: "70%" } },
-    { id: "5", owner: "You", area: "1.2 km²", status: "claimed", color: "territory-claimed", position: { top: "70%", left: "45%" } },
-    { id: "6", owner: "SpeedDemon", area: "2.7 km²", status: "contested", color: "territory-contested", position: { top: "15%", left: "80%" } },
+    { 
+      id: "1", 
+      owner: "You", 
+      area: "2.4 km²", 
+      status: "claimed", 
+      color: "territory-claimed", 
+      path: "M 120 80 L 180 95 L 200 140 L 170 180 L 130 185 L 100 150 L 105 110 Z",
+      center: { x: 150, y: 135 }
+    },
+    { 
+      id: "2", 
+      owner: "Alex_Runner", 
+      area: "1.8 km²", 
+      status: "enemy", 
+      color: "destructive", 
+      path: "M 320 160 L 380 170 L 400 220 L 360 250 L 310 240 L 300 190 Z",
+      center: { x: 350, y: 205 }
+    },
+    { 
+      id: "3", 
+      owner: "FastTracker", 
+      area: "3.1 km²", 
+      status: "enemy", 
+      color: "destructive", 
+      path: "M 80 280 L 160 270 L 180 320 L 140 380 L 90 390 L 60 350 L 70 310 Z",
+      center: { x: 120, y: 330 }
+    },
+    { 
+      id: "4", 
+      owner: "Unknown", 
+      area: "0.9 km²", 
+      status: "neutral", 
+      color: "territory-neutral", 
+      path: "M 420 120 L 460 130 L 470 160 L 450 180 L 410 175 L 405 145 Z",
+      center: { x: 440, y: 150 }
+    },
+    { 
+      id: "5", 
+      owner: "You", 
+      area: "1.2 km²", 
+      status: "claimed", 
+      color: "territory-claimed", 
+      path: "M 220 340 L 280 330 L 300 370 L 270 400 L 230 395 L 210 365 Z",
+      center: { x: 255, y: 365 }
+    },
+    { 
+      id: "6", 
+      owner: "SpeedDemon", 
+      area: "2.7 km²", 
+      status: "contested", 
+      color: "territory-contested", 
+      path: "M 380 60 L 450 70 L 480 110 L 460 150 L 400 160 L 370 120 L 375 90 Z",
+      center: { x: 425, y: 110 }
+    },
   ];
 
   const activeRoutes = [
@@ -67,50 +115,81 @@ const Territory = () => {
               </CardHeader>
               <CardContent className="p-0">
                 <div className="aspect-[4/3] bg-background/20 relative overflow-hidden rounded-b-lg">
-                  {/* Territory zones */}
-                  {territories.map((territory) => (
-                    <div
-                      key={territory.id}
-                      className={`absolute w-16 h-16 rounded-full cursor-pointer transition-all duration-300 ${
-                        selectedTerritory === territory.id ? 'scale-110 shadow-territory' : 'hover:scale-105'
-                      }`}
-                      style={{ 
-                        top: territory.position.top, 
-                        left: territory.position.left,
-                        backgroundColor: `hsl(var(--${territory.color}) / 0.3)`,
-                        border: `2px solid hsl(var(--${territory.color}))`
-                      }}
-                      onClick={() => setSelectedTerritory(territory.id)}
-                    >
-                      <div className="absolute inset-0 rounded-full animate-pulse"
-                           style={{ backgroundColor: `hsl(var(--${territory.color}) / 0.2)` }} />
-                      <div className="absolute inset-2 rounded-full flex items-center justify-center">
-                        {territory.status === 'claimed' && <Shield className="w-4 h-4 text-territory-claimed" />}
-                        {territory.status === 'enemy' && <Target className="w-4 h-4 text-destructive" />}
-                        {territory.status === 'neutral' && <MapPin className="w-4 h-4 text-territory-neutral" />}
-                        {territory.status === 'contested' && <AlertTriangle className="w-4 h-4 text-territory-contested" />}
-                      </div>
-                    </div>
-                  ))}
+                  {/* Territory zones as irregular polygons */}
+                  <svg className="absolute inset-0 w-full h-full" viewBox="0 0 500 400">
+                    {/* Territory polygons */}
+                    {territories.map((territory) => (
+                      <g key={territory.id}>
+                        <path
+                          d={territory.path}
+                          fill={`hsl(var(--${territory.color}) / 0.3)`}
+                          stroke={`hsl(var(--${territory.color}))`}
+                          strokeWidth="2"
+                          className={`cursor-pointer transition-all duration-300 ${
+                            selectedTerritory === territory.id ? 'drop-shadow-territory' : 'hover:brightness-110'
+                          }`}
+                          onClick={() => setSelectedTerritory(territory.id)}
+                        />
+                        <circle
+                          cx={territory.center.x}
+                          cy={territory.center.y}
+                          r="8"
+                          fill={`hsl(var(--${territory.color}))`}
+                          className="cursor-pointer"
+                          onClick={() => setSelectedTerritory(territory.id)}
+                        >
+                          <animate
+                            attributeName="r"
+                            values="8;12;8"
+                            dur="2s"
+                            repeatCount="indefinite"
+                          />
+                        </circle>
+                        {/* Territory icon */}
+                        <g transform={`translate(${territory.center.x - 6}, ${territory.center.y - 6})`}>
+                          {territory.status === 'claimed' && (
+                            <path d="M2 8l4-4 4 4v6H2V8z" fill="white" stroke="none" />
+                          )}
+                          {territory.status === 'enemy' && (
+                            <circle cx="6" cy="6" r="4" fill="white" stroke="none" />
+                          )}
+                          {territory.status === 'neutral' && (
+                            <rect x="3" y="3" width="6" height="6" fill="white" stroke="none" />
+                          )}
+                          {territory.status === 'contested' && (
+                            <path d="M6 2 L10 6 L6 10 L2 6 Z" fill="white" stroke="none" />
+                          )}
+                        </g>
+                      </g>
+                    ))}
 
-                  {/* Active routes visualization */}
-                  <svg className="absolute inset-0 w-full h-full">
+                    {/* Active routes - showing conquest paths */}
                     <path
-                      d="M 150 100 Q 300 150 450 200"
+                      d="M 150 135 Q 250 180 350 205"
                       fill="none"
                       stroke="hsl(var(--primary))"
-                      strokeWidth="2"
-                      strokeDasharray="5,5"
+                      strokeWidth="3"
+                      strokeDasharray="8,4"
                       className="animate-pulse"
                     />
                     <path
-                      d="M 200 300 Q 350 200 500 250"
+                      d="M 255 365 Q 300 280 440 150"
                       fill="none"
                       stroke="hsl(var(--destructive))"
-                      strokeWidth="2"
-                      strokeDasharray="8,4"
+                      strokeWidth="3"
+                      strokeDasharray="12,6"
                       className="animate-pulse"
-                      style={{ animationDelay: '0.5s' }}
+                      style={{ animationDelay: '0.8s' }}
+                    />
+                    
+                    {/* Overlapping territory indicator */}
+                    <path
+                      d="M 160 270 L 200 260 L 220 290 L 190 310 L 150 305 Z"
+                      fill="hsl(var(--territory-contested) / 0.6)"
+                      stroke="hsl(var(--territory-contested))"
+                      strokeWidth="2"
+                      strokeDasharray="4,4"
+                      className="animate-pulse"
                     />
                   </svg>
 
