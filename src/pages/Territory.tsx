@@ -232,9 +232,6 @@ const Territory = () => {
                           <Polygon key={t.id} positions={latlngs} pathOptions={{ color, fillOpacity: 0.3 }} />
                         );
                       })}
-                      {/* Themed overlay for map styling */}
-                      <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-primary/5 via-transparent to-territory-claimed/10 mix-blend-soft-light" />
-                      <div className="absolute inset-0 pointer-events-none border border-primary/20 rounded-b-lg" />
                     </MapContainer>
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
@@ -242,23 +239,57 @@ const Territory = () => {
                     </div>
                   )}
 
-                  {/* Control buttons - repositioned to avoid overlap */}
-                  <div className="absolute bottom-4 right-4 flex flex-col gap-2 z-10">
-                    <Button size="sm" className="bg-primary/90 hover:bg-primary shadow-lg backdrop-blur-sm" onClick={handlePlanRoute}>
+                  {/* Futuristic map overlays */}
+                  <div className="absolute inset-0 pointer-events-none">
+                    {/* Primary gradient overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 via-transparent to-primary/15 mix-blend-soft-light" />
+                    
+                    {/* Orange glow effects */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-orange-400/8 to-transparent mix-blend-screen" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-orange-300/5 via-transparent to-orange-500/12 mix-blend-color-dodge" />
+                    
+                    {/* Futuristic grid pattern */}
+                    <div className="absolute inset-0 opacity-20" style={{
+                      backgroundImage: `
+                        linear-gradient(rgba(255, 165, 0, 0.1) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(255, 165, 0, 0.1) 1px, transparent 1px)
+                      `,
+                      backgroundSize: '50px 50px'
+                    }} />
+                    
+                    {/* Border with orange accent */}
+                    <div className="absolute inset-0 border border-orange-400/30 rounded-b-lg shadow-[inset_0_0_20px_rgba(255,165,0,0.1)]" />
+                    
+                    {/* Corner accent lights */}
+                    <div className="absolute top-2 left-2 w-3 h-3 bg-orange-400/60 rounded-full blur-sm animate-pulse" />
+                    <div className="absolute top-2 right-2 w-2 h-2 bg-primary/80 rounded-full blur-sm animate-pulse delay-500" />
+                    <div className="absolute bottom-2 left-2 w-2 h-2 bg-orange-300/70 rounded-full blur-sm animate-pulse delay-1000" />
+                  </div>
+
+                  {/* Control buttons - positioned to avoid map controls */}
+                  <div className="absolute bottom-6 left-6 flex flex-col gap-3 z-20">
+                    <Button size="sm" className="bg-gradient-to-r from-orange-500/90 to-primary/90 hover:from-orange-400 hover:to-primary shadow-xl backdrop-blur-md border border-orange-400/30" onClick={handlePlanRoute}>
                       <Navigation className="w-4 h-4 mr-2" />
                       Plan Route
                     </Button>
-                    <Button size="sm" variant="outline" className="bg-background/90 border-border/50 shadow-lg backdrop-blur-sm hover:bg-muted/90" onClick={handleLiveView}>
+                    <Button size="sm" variant="outline" className="bg-background/95 border-orange-400/40 shadow-xl backdrop-blur-md hover:bg-orange-50/10 hover:border-orange-400/60" onClick={handleLiveView}>
                       <Activity className="w-4 h-4 mr-2" />
                       Live View
                     </Button>
                   </div>
                   
-                  {/* GPS Status indicator */}
-                  <div className="absolute top-4 right-4 z-10">
-                    <Badge className="bg-territory-claimed/90 text-territory-claimed-foreground shadow-lg backdrop-blur-sm">
-                      {coords ? "GPS Active" : "Searching GPS..."}
+                  {/* GPS Status indicator with futuristic styling */}
+                  <div className="absolute top-6 right-6 z-20">
+                    <Badge className="bg-gradient-to-r from-territory-claimed/95 to-orange-500/80 text-white shadow-xl backdrop-blur-md border border-orange-400/50">
+                      <div className="w-2 h-2 bg-orange-300 rounded-full mr-2 animate-pulse" />
+                      {coords ? "GPS ACTIVE" : "SEARCHING..."}
                     </Badge>
+                  </div>
+
+                  {/* Futuristic scanning lines */}
+                  <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-400/60 to-transparent animate-pulse" />
+                    <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent animate-pulse delay-700" />
                   </div>
                 </div>
               </CardContent>
