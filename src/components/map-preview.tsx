@@ -16,7 +16,6 @@ const DefaultIcon = L.icon({
   iconSize: [25, 41],
   iconAnchor: [12, 41],
 });
-// @ts-expect-error - prototype mutation to set default icon
 L.Marker.prototype.options.icon = DefaultIcon;
 
 const MapPreview = () => {
@@ -76,8 +75,9 @@ const MapPreview = () => {
                       <Marker position={center}>
                         <Popup>You are here</Popup>
                       </Marker>
-                      {/* Subtle orange tint to blend with app theme */}
-                      <div className="absolute inset-0 pointer-events-none" style={{ mixBlendMode: "multiply", background: "linear-gradient(0deg, rgba(255,102,51,0.08), rgba(255,102,51,0.08))" }} />
+                      {/* Themed overlay for map styling */}
+                      <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-primary/8 via-transparent to-territory-claimed/12 mix-blend-soft-light" />
+                      <div className="absolute inset-0 pointer-events-none border border-primary/20 rounded-b-lg" />
                     </MapContainer>
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">

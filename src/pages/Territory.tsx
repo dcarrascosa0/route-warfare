@@ -28,7 +28,6 @@ const DefaultIcon = L.icon({
   iconSize: [25, 41],
   iconAnchor: [12, 41],
 });
-// @ts-expect-error prototype assignment to set default icon
 L.Marker.prototype.options.icon = DefaultIcon;
 
 type GeoPoint = { longitude: number; latitude: number };
@@ -233,7 +232,9 @@ const Territory = () => {
                           <Polygon key={t.id} positions={latlngs} pathOptions={{ color, fillOpacity: 0.3 }} />
                         );
                       })}
-                      <div className="absolute inset-0 pointer-events-none" style={{ mixBlendMode: "multiply", background: "linear-gradient(0deg, rgba(255,102,51,0.06), rgba(255,102,51,0.06))" }} />
+                      {/* Themed overlay for map styling */}
+                      <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-primary/5 via-transparent to-territory-claimed/10 mix-blend-soft-light" />
+                      <div className="absolute inset-0 pointer-events-none border border-primary/20 rounded-b-lg" />
                     </MapContainer>
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
@@ -241,16 +242,23 @@ const Territory = () => {
                     </div>
                   )}
 
-                  {/* Control buttons */}
-                  <div className="absolute bottom-4 left-4 flex gap-2">
-                    <Button size="sm" className="bg-primary/20 hover:bg-primary/30" onClick={handlePlanRoute}>
+                  {/* Control buttons - repositioned to avoid overlap */}
+                  <div className="absolute bottom-4 right-4 flex flex-col gap-2 z-10">
+                    <Button size="sm" className="bg-primary/90 hover:bg-primary shadow-lg backdrop-blur-sm" onClick={handlePlanRoute}>
                       <Navigation className="w-4 h-4 mr-2" />
                       Plan Route
                     </Button>
-                    <Button size="sm" variant="outline" className="border-muted/30" onClick={handleLiveView}>
+                    <Button size="sm" variant="outline" className="bg-background/90 border-border/50 shadow-lg backdrop-blur-sm hover:bg-muted/90" onClick={handleLiveView}>
                       <Activity className="w-4 h-4 mr-2" />
                       Live View
                     </Button>
+                  </div>
+                  
+                  {/* GPS Status indicator */}
+                  <div className="absolute top-4 right-4 z-10">
+                    <Badge className="bg-territory-claimed/90 text-territory-claimed-foreground shadow-lg backdrop-blur-sm">
+                      {coords ? "GPS Active" : "Searching GPS..."}
+                    </Badge>
                   </div>
                 </div>
               </CardContent>
