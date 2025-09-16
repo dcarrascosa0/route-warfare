@@ -141,9 +141,9 @@ export default function TerritoryPage() {
   const center: [number, number] | null = coords ? [coords.latitude, coords.longitude] : null;
 
   // Fetch territories near the user (bbox around position; world until we have GPS)
-  const { data: mapData, isFetching, refetch } = useQuery<{ data: TerritoryMapResponse } | undefined>({
+  const { data: mapData, isFetching, refetch } = useQuery({
     queryKey: ["territories", "map", coords?.latitude, coords?.longitude],
-    queryFn: () => {
+    queryFn: async () => {
       if (!coords) {
         return GatewayAPI.territoriesMap({
           min_longitude: -180,
@@ -166,7 +166,8 @@ export default function TerritoryPage() {
   });
 
   const territoriesFromApi: Territory[] =
-    ((mapData?.data as any)?.territories as Territory[]) || [];
+    (mapData?.ok && mapData.data && (mapData.data as any).territories) ? 
+    (mapData.data as any).territories : [];
 
   // UI handlers
   const handleTerritoryClick = (territoryId: string) => {
@@ -186,12 +187,12 @@ export default function TerritoryPage() {
       <Button
         size="icon"
         variant="secondary"
-        className="h-10 w-10 rounded-full shadow-xl backdrop-blur-md border border-orange-400/30"
+        className="h-8 w-8 sm:h-10 sm:w-10 rounded-full shadow-xl backdrop-blur-md border border-orange-400/30"
         onClick={() => map.flyTo(center, Math.max(map.getZoom(), 13), { duration: 0.6 })}
         aria-label="Recenter on me"
         title="Recenter on me"
       >
-        <TargetIcon className="h-5 w-5" />
+        <TargetIcon className="h-3 w-3 sm:h-5 sm:w-5" />
       </Button>
     );
   };
@@ -214,12 +215,12 @@ export default function TerritoryPage() {
       <Button
         size="icon"
         variant="secondary"
-        className="h-10 w-10 rounded-full shadow-xl backdrop-blur-md border border-orange-400/30"
+        className="h-8 w-8 sm:h-10 sm:w-10 rounded-full shadow-xl backdrop-blur-md border border-orange-400/30"
         onClick={() => map.fitBounds(bounds, { padding: [24, 24] })}
         aria-label="Fit to territories"
         title="Fit to territories"
       >
-        <Maximize2 className="h-5 w-5" />
+        <Maximize2 className="h-3 w-3 sm:h-5 sm:w-5" />
       </Button>
     );
   };
@@ -228,12 +229,12 @@ export default function TerritoryPage() {
     <Button
       size="icon"
       variant="secondary"
-      className="h-10 w-10 rounded-full shadow-xl backdrop-blur-md border border-orange-400/30"
+      className="h-8 w-8 sm:h-10 sm:w-10 rounded-full shadow-xl backdrop-blur-md border border-orange-400/30"
       onClick={() => refetch()}
       aria-label="Refresh"
       title="Refresh"
     >
-      <RefreshCw className={`h-5 w-5 ${isFetching ? "animate-spin" : ""}`} />
+      <RefreshCw className={`h-3 w-3 sm:h-5 sm:w-5 ${isFetching ? "animate-spin" : ""}`} />
     </Button>
   );
 
@@ -254,25 +255,29 @@ export default function TerritoryPage() {
           <p className="text-xl text-muted-foreground">Monitor your zones, track enemy movements, and plan your next conquest.</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8">
           {/* Map column */}
           <div className="lg:col-span-3">
             <Card className="bg-gradient-map border-border/50 shadow-glow">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
+              <CardHeader className="p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                     <MapPin className="w-5 h-5 text-primary" />
                     Live Territory Map
                   </CardTitle>
-                  <div className="flex gap-2 items-center">
-                    <Badge className="bg-territory-claimed/20 text-territory-claimed border-territory-claimed/30">Your Zones: 3</Badge>
-                    <Badge variant="outline" className="border-muted/30">{followMe ? "Live GPS" : "GPS Paused"}</Badge>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <Badge className="bg-territory-claimed/20 text-territory-claimed border-territory-claimed/30 text-xs sm:text-sm">
+                      Your Zones: 3
+                    </Badge>
+                    <Badge variant="outline" className="border-muted/30 text-xs sm:text-sm">
+                      {followMe ? "Live GPS" : "GPS Paused"}
+                    </Badge>
                   </div>
                 </div>
               </CardHeader>
 
               <CardContent className="p-0">
-                <div className="aspect-[4/3] bg-background/20 relative overflow-hidden rounded-b-lg min-h-[420px] isolate">
+                <div className="aspect-[4/3] sm:aspect-[16/10] bg-background/20 relative overflow-hidden rounded-b-lg min-h-[300px] sm:min-h-[420px] isolate">
                   {center ? (
                     <MapContainer
                       center={center}
@@ -329,16 +334,17 @@ export default function TerritoryPage() {
                       })}
 
                       {/* Floating control cluster */}
-                      <div className="rw-map-controls absolute bottom-6 left-6 flex flex-col gap-3 z-[600] pointer-events-auto">
+                      <div className="rw-map-controls absolute bottom-3 sm:bottom-6 left-3 sm:left-6 flex flex-col gap-2 sm:gap-3 z-[600] pointer-events-auto">
                         <Button
                           size="sm"
-                          className="bg-gradient-to-r from-orange-500/90 to-primary/90 hover:from-orange-400 hover:to-primary shadow-xl backdrop-blur-md border border-orange-400/30"
+                          className="bg-gradient-to-r from-orange-500/90 to-primary/90 hover:from-orange-400 hover:to-primary shadow-xl backdrop-blur-md border border-orange-400/30 text-xs sm:text-sm px-2 sm:px-3"
                           onClick={handlePlanRoute}
                         >
-                          <Navigation className="w-4 h-4 mr-2" />
-                          Plan Route
+                          <Navigation className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                          <span className="hidden xs:inline">Plan Route</span>
+                          <span className="xs:hidden">Route</span>
                         </Button>
-                        <div className="flex gap-2">
+                        <div className="flex gap-1 sm:gap-2">
                           <RecenterButton />
                           <FitToDataButton />
                           <RefreshButton />
@@ -346,24 +352,29 @@ export default function TerritoryPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="bg-background/95 border-orange-400/40 shadow-xl backdrop-blur-md hover:bg-orange-50/10 hover:border-orange-400/60"
+                          className="bg-background/95 border-orange-400/40 shadow-xl backdrop-blur-md hover:bg-orange-50/10 hover:border-orange-400/60 text-xs sm:text-sm px-2 sm:px-3"
                           onClick={() => setFollowMe((v) => !v)}
                         >
-                          <Activity className="w-4 h-4 mr-2" />
-                          {followMe ? "Pause Live" : "Live View"}
+                          <Activity className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                          <span className="hidden xs:inline">{followMe ? "Pause Live" : "Live View"}</span>
+                          <span className="xs:hidden">{followMe ? "Pause" : "Live"}</span>
                         </Button>
                       </div>
 
                       {/* Legend moved out to sit above overlays */}
 
                       {/* Status badges */}
-                      <div className="rw-map-controls absolute top-6 right-6 z-[600] flex items-center gap-2 pointer-events-auto">
-                        <Badge className="bg-gradient-to-r from-territory-claimed/95 to-orange-500/80 text-white shadow-xl backdrop-blur-md border border-orange-400/50">
-                          <div className={`w-2 h-2 rounded-full mr-2 ${coords ? "bg-orange-300 animate-pulse" : "bg-zinc-400"}`} />
-                          {coords ? "GPS ACTIVE" : "SEARCHING..."}
+                      <div className="rw-map-controls absolute top-3 sm:top-6 right-3 sm:right-6 z-[600] flex flex-col sm:flex-row items-end sm:items-center gap-2 pointer-events-auto">
+                        <Badge className="bg-gradient-to-r from-territory-claimed/95 to-orange-500/80 text-white shadow-xl backdrop-blur-md border border-orange-400/50 text-xs sm:text-sm">
+                          <div className={`w-2 h-2 rounded-full mr-1 sm:mr-2 ${coords ? "bg-orange-300 animate-pulse" : "bg-zinc-400"}`} />
+                          <span className="hidden xs:inline">{coords ? "GPS ACTIVE" : "SEARCHING..."}</span>
+                          <span className="xs:hidden">{coords ? "GPS" : "..."}</span>
                         </Badge>
                         {isFetching && (
-                          <Badge variant="outline" className="border-orange-400/50 text-orange-300 animate-pulse">Updating…</Badge>
+                          <Badge variant="outline" className="border-orange-400/50 text-orange-300 animate-pulse text-xs sm:text-sm">
+                            <span className="hidden sm:inline">Updating…</span>
+                            <span className="sm:hidden">•••</span>
+                          </Badge>
                         )}
                       </div>
                     </MapContainer>
@@ -388,12 +399,21 @@ export default function TerritoryPage() {
                   </div>
 
                   {/* Legend above overlays */}
-                  <div className="rw-map-controls absolute bottom-6 right-6 z-[600] pointer-events-auto rounded-lg border border-white/10 bg-black/40 backdrop-blur-md p-3 text-xs text-foreground/90 shadow-lg">
-                    <div className="font-semibold mb-2">Legend</div>
+                  <div className="rw-map-controls absolute bottom-3 sm:bottom-6 right-3 sm:right-6 z-[600] pointer-events-auto rounded-lg border border-white/10 bg-black/40 backdrop-blur-md p-2 sm:p-3 text-xs text-foreground/90 shadow-lg">
+                    <div className="font-semibold mb-1 sm:mb-2 text-xs sm:text-sm">Legend</div>
                     <div className="space-y-1">
-                      <div className="flex items-center gap-2"><span className="inline-block h-2 w-2 rounded-full" style={{ background: "#fb5a2c" }} /> Claimed</div>
-                      <div className="flex items-center gap-2"><span className="inline-block h-2 w-2 rounded-full" style={{ background: "#fbbf24" }} /> Contested</div>
-                      <div className="flex items-center gap-2"><span className="inline-block h-2 w-2 rounded-full" style={{ background: "#22d3ee" }} /> Neutral</div>
+                      <div className="flex items-center gap-1 sm:gap-2">
+                        <span className="inline-block h-2 w-2 rounded-full" style={{ background: "#fb5a2c" }} />
+                        <span className="text-xs">Claimed</span>
+                      </div>
+                      <div className="flex items-center gap-1 sm:gap-2">
+                        <span className="inline-block h-2 w-2 rounded-full" style={{ background: "#fbbf24" }} />
+                        <span className="text-xs">Contested</span>
+                      </div>
+                      <div className="flex items-center gap-1 sm:gap-2">
+                        <span className="inline-block h-2 w-2 rounded-full" style={{ background: "#22d3ee" }} />
+                        <span className="text-xs">Neutral</span>
+                      </div>
                     </div>
                   </div>
                 </div>

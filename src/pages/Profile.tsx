@@ -70,28 +70,28 @@ const Profile = () => {
     <div className="min-h-screen bg-background">
       <main className="max-w-6xl mx-auto px-6 py-8">
         {/* Profile Header */}
-        <div className="mb-8">
+        <div className="mb-6 lg:mb-8">
           <Card className="bg-gradient-hero/10 border-primary/30">
-            <CardContent className="p-8">
-              <div className="flex items-center gap-6">
-                <Avatar className="w-20 h-20">
-                  <AvatarFallback className="bg-primary/20 text-primary text-2xl font-bold">
+            <CardContent className="p-4 sm:p-6 lg:p-8">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+                <Avatar className="w-16 h-16 sm:w-20 sm:h-20 mx-auto sm:mx-0">
+                  <AvatarFallback className="bg-primary/20 text-primary text-xl sm:text-2xl font-bold">
                     YU
                   </AvatarFallback>
                 </Avatar>
-                <div className="flex-1">
-                  <h1 className="text-3xl font-bold mb-2">Your Profile</h1>
-                  <div className="flex items-center gap-4 text-muted-foreground mb-4">
-                    <span className="flex items-center gap-1">
+                <div className="flex-1 text-center sm:text-left">
+                  <h1 className="text-2xl sm:text-3xl font-bold mb-2">Your Profile</h1>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-muted-foreground mb-4">
+                    <span className="flex items-center justify-center sm:justify-start gap-1">
                       <Calendar className="w-4 h-4" />
                       Member since March 2024
                     </span>
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center justify-center sm:justify-start gap-1">
                       <Activity className="w-4 h-4" />
                       Last active: Today
                     </span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap justify-center sm:justify-start gap-2">
                     <Badge className="bg-territory-claimed/20 text-territory-claimed">
                       Territory Expert
                     </Badge>
@@ -103,7 +103,7 @@ const Profile = () => {
                     </Badge>
                   </div>
                 </div>
-                <Button className="bg-gradient-hero hover:shadow-glow">
+                <Button className="bg-gradient-hero hover:shadow-glow w-full sm:w-auto">
                   Edit Profile
                 </Button>
               </div>
@@ -111,11 +111,11 @@ const Profile = () => {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
           {/* Main Content */}
-          <div className="lg:col-span-2 space-y-8">
+          <div className="lg:col-span-2 space-y-6 lg:space-y-8">
             {/* Stats Overview */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
               {stats.map((stat, index) => {
                 const IconComponent = stat.icon;
                 return (
@@ -170,36 +170,36 @@ const Profile = () => {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {achievements.map((achievement) => {
-                    const IconComponent = achievement.icon;
-                    return (
-                      <div
-                        key={achievement.id}
-                        className={`flex items-center gap-3 p-4 rounded-lg transition-all duration-300 ${
-                          achievement.earned 
-                            ? 'bg-gradient-hero/10 border border-primary/30' 
-                            : 'bg-background/50 opacity-60'
-                        }`}
-                      >
-                        <div className={`flex items-center justify-center w-10 h-10 rounded-lg ${
-                          achievement.earned ? 'bg-primary/20' : 'bg-muted/20'
-                        }`}>
-                          <IconComponent className={`w-5 h-5 ${
-                            achievement.earned ? 'text-primary' : 'text-muted-foreground'
-                          }`} />
-                        </div>
-                        <div>
-                          <h4 className="font-semibold">{achievement.name}</h4>
-                          <p className="text-sm text-muted-foreground">{achievement.description}</p>
-                        </div>
-                        {achievement.earned && (
-                          <Badge className="ml-auto bg-territory-claimed/20 text-territory-claimed text-xs">
-                            Earned
-                          </Badge>
-                        )}
+                {achievements.map((achievement) => {
+                  const IconComponent = achievement.icon;
+                  return (
+                    <div
+                      key={achievement.id}
+                      className={`flex items-center gap-3 p-3 sm:p-4 rounded-lg transition-all duration-300 hover-scale ${
+                        achievement.earned 
+                          ? 'bg-gradient-hero/10 border border-primary/30' 
+                          : 'bg-background/50 opacity-60'
+                      }`}
+                    >
+                      <div className={`flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg ${
+                        achievement.earned ? 'bg-primary/20' : 'bg-muted/20'
+                      }`}>
+                        <IconComponent className={`w-4 h-4 sm:w-5 sm:h-5 ${
+                          achievement.earned ? 'text-primary' : 'text-muted-foreground'
+                        }`} />
                       </div>
-                    );
-                  })}
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-sm sm:text-base truncate">{achievement.name}</h4>
+                        <p className="text-xs sm:text-sm text-muted-foreground">{achievement.description}</p>
+                      </div>
+                      {achievement.earned && (
+                        <Badge className="bg-territory-claimed/20 text-territory-claimed text-xs shrink-0">
+                          Earned
+                        </Badge>
+                      )}
+                    </div>
+                  );
+                })}
                 </div>
               </CardContent>
             </Card>

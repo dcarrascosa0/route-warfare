@@ -149,60 +149,60 @@ const Leaderboard = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8">
           {/* Main Leaderboard */}
           <div className="lg:col-span-3">
             <Card className="bg-card/80 border-border/50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Trophy className="w-6 h-6 text-primary" />
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                  <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
                   Territory Leaderboard
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="space-y-2">
+                <div className="space-y-1 sm:space-y-2">
                   {topPlayers.map((player, index) => (
                     <div
                       key={player.rank}
-                      className={`flex items-center gap-4 p-4 transition-all duration-300 hover:bg-primary/5 ${
+                      className={`flex items-center gap-2 sm:gap-4 p-3 sm:p-4 transition-all duration-300 hover:bg-primary/5 hover-scale ${
                         player.name === "You" ? "bg-gradient-hero/10 border-l-4 border-primary" : ""
                       } ${index < 3 ? "bg-background/50" : ""}`}
                     >
                       {/* Rank */}
-                      <div className="flex items-center justify-center w-12 h-12">
+                      <div className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 shrink-0">
                         {getRankIcon(player.rank, player.badge)}
                       </div>
 
-                      {/* Avatar */}
-                      <Avatar className="w-10 h-10">
-                        <AvatarFallback className="bg-primary/20 text-primary font-bold">
+                      {/* Avatar - Hidden on very small screens */}
+                      <Avatar className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 hidden xs:block">
+                        <AvatarFallback className="bg-primary/20 text-primary font-bold text-sm sm:text-base">
                           {player.name.slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
 
                       {/* Player Info */}
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <h3 className={`font-bold ${player.name === "You" ? "text-primary" : ""}`}>
+                          <h3 className={`font-bold text-sm sm:text-base truncate ${player.name === "You" ? "text-primary" : ""}`}>
                             {player.name}
                           </h3>
                           {player.name === "You" && (
-                            <Badge className="bg-primary/20 text-primary text-xs">You</Badge>
+                            <Badge className="bg-primary/20 text-primary text-xs shrink-0">You</Badge>
                           )}
                         </div>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span>{player.zones} zones</span>
-                          <span>{player.routes} routes</span>
-                          <span>{player.winRate} win rate</span>
+                        <div className="flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
+                          <span className="whitespace-nowrap">{player.zones} zones</span>
+                          <span className="whitespace-nowrap hidden sm:inline">{player.routes} routes</span>
+                          <span className="whitespace-nowrap">{player.winRate} win</span>
                         </div>
                       </div>
 
                       {/* Territory */}
-                      <div className="text-right">
-                        <p className="text-2xl font-bold text-territory-claimed">{player.totalArea}</p>
+                      <div className="text-right shrink-0">
+                        <p className="text-lg sm:text-2xl font-bold text-territory-claimed">{player.totalArea}</p>
                         <div className="flex items-center gap-1 justify-end">
                           {getTrendIcon(player.trend)}
-                          <span className={`text-xs text-${getTrendColor(player.trend)}`}>
+                          <span className={`text-xs text-${getTrendColor(player.trend)} hidden sm:inline`}>
                             {player.trend}
                           </span>
                         </div>
