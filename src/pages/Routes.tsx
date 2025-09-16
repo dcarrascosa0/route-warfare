@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,8 @@ import {
   Target,
   Navigation
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { GatewayAPI } from "@/lib/api";
 
 const Routes = () => {
   const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
@@ -23,6 +25,13 @@ const Routes = () => {
   useEffect(() => {
     document.title = "Route Selection - Route Wars";
   }, []);
+
+  const userId = useMemo(() => localStorage.getItem("user_id"), []);
+  const { data: userRoutes } = useQuery({
+    queryKey: ["routes", userId],
+    queryFn: () => (userId ? GatewayAPI.routesForUser(userId) : Promise.resolve({ ok: false } as any)),
+    enabled: !!userId,
+  });
 
   const availableRoutes = [
     {

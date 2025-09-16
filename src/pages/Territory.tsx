@@ -1,4 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { MapContainer, TileLayer, Marker, Popup, Polygon, useMap } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +17,48 @@ import {
   Users,
   AlertTriangle
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { GatewayAPI } from "@/lib/api";
+
+// Fix default Leaflet marker icons for Vite bundling
+const DefaultIcon = L.icon({
+  iconUrl: new URL("leaflet/dist/images/marker-icon.png", import.meta.url).toString(),
+  iconRetinaUrl: new URL("leaflet/dist/images/marker-icon-2x.png", import.meta.url).toString(),
+  shadowUrl: new URL("leaflet/dist/images/marker-shadow.png", import.meta.url).toString(),
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+});
+// @ts-expect-error prototype assignment to set default icon
+L.Marker.prototype.options.icon = DefaultIcon;
+
+type GeoPoint = { longitude: number; latitude: number };
+type Territory = { id: string; status: string; boundary_coordinates: GeoPoint[] };
+type TerritoryMapResponse = { territories: Territory[] };
+
+function getTerritoryColor(status: string | undefined): string {
+  switch ((status || "").toLowerCase()) {
+    case "claimed":
+      return "#16a34a"; // green
+    case "contested":
+      return "#e11d48"; // red
+    case "neutral":
+      return "#6b7280"; // gray
+    default:
+      return "#3b82f6"; // blue
+  }
+}
+
+const ResizeFix = () => {
+  const map = useMap();
+  useEffect(() => {
+    // Ensure the map calculates correct size after being placed in a flex/aspect container
+    setTimeout(() => map.invalidateSize(), 0);
+  }, [map]);
+  return null;
+};
+
+const TILE_URL = (import.meta as any)?.env?.VITE_MAP_TILE_URL ??
+  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 
 const Territory = () => {
   const [selectedTerritory, setSelectedTerritory] = useState<string | null>(null);
@@ -21,6 +66,19 @@ const Territory = () => {
 
   useEffect(() => {
     document.title = "Territory Map - Route Wars";
+  }, []);
+
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+        },
+        () => setCoords(null),
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
   }, []);
 
   const handleTerritoryClick = (territoryId: string) => {
@@ -37,7 +95,35 @@ const Territory = () => {
     toast("Live GPS activated", { description: "Real-time territory updates enabled" });
   };
 
-  const territories = [
+  const { data: mapData } = useQuery({
+    queryKey: ["territories", "map", coords?.latitude, coords?.longitude],
+    queryFn: () => {
+      // Default to world bbox while awaiting geolocation to avoid 422
+      if (!coords) {
+        return GatewayAPI.territoriesMap({
+          min_longitude: -180,
+          min_latitude: -90,
+          max_longitude: 180,
+          max_latitude: 90,
+          limit: 50,
+        });
+      }
+      const dLat = 0.2;
+      const dLon = 0.2;
+      return GatewayAPI.territoriesMap({
+        min_longitude: coords.longitude - dLon,
+        min_latitude: coords.latitude - dLat,
+        max_longitude: coords.longitude + dLon,
+        max_latitude: coords.latitude + dLat,
+        limit: 50,
+      });
+    },
+  });
+
+  const center: [number, number] | null = coords ? [coords.latitude, coords.longitude] : null;
+  const territoriesFromApi: Territory[] = ((mapData?.data as any)?.territories as Territory[]) || [];
+
+  const territories = useMemo(() => [
     { 
       id: "1", 
       owner: "You", 
@@ -92,7 +178,7 @@ const Territory = () => {
       path: "M 380 60 L 450 70 L 480 110 L 460 150 L 400 160 L 370 120 L 375 90 Z",
       center: { x: 425, y: 110 }
     },
-  ];
+  ], [mapData]);
 
   const activeRoutes = [
     { id: "1", user: "MikeRuns", target: "Your Central Park Zone", eta: "12 min", threat: "high" },
@@ -131,84 +217,29 @@ const Territory = () => {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="aspect-[4/3] bg-background/20 relative overflow-hidden rounded-b-lg">
-                  {/* Territory zones as irregular polygons */}
-                  <svg className="absolute inset-0 w-full h-full" viewBox="0 0 500 400">
-                    {/* Territory polygons */}
-                    {territories.map((territory) => (
-                      <g key={territory.id}>
-                        <path
-                          d={territory.path}
-                          fill={`hsl(var(--${territory.color}) / 0.3)`}
-                          stroke={`hsl(var(--${territory.color}))`}
-                          strokeWidth="2"
-                          className={`cursor-pointer transition-all duration-300 ${
-                            selectedTerritory === territory.id ? 'drop-shadow-territory' : 'hover:brightness-110'
-                          }`}
-                          onClick={() => handleTerritoryClick(territory.id)}
-                        />
-                        <circle
-                          cx={territory.center.x}
-                          cy={territory.center.y}
-                          r="8"
-                          fill={`hsl(var(--${territory.color}))`}
-                          className="cursor-pointer"
-                          onClick={() => handleTerritoryClick(territory.id)}
-                        >
-                          <animate
-                            attributeName="r"
-                            values="8;12;8"
-                            dur="2s"
-                            repeatCount="indefinite"
-                          />
-                        </circle>
-                        {/* Territory icon */}
-                        <g transform={`translate(${territory.center.x - 6}, ${territory.center.y - 6})`}>
-                          {territory.status === 'claimed' && (
-                            <path d="M2 8l4-4 4 4v6H2V8z" fill="white" stroke="none" />
-                          )}
-                          {territory.status === 'enemy' && (
-                            <circle cx="6" cy="6" r="4" fill="white" stroke="none" />
-                          )}
-                          {territory.status === 'neutral' && (
-                            <rect x="3" y="3" width="6" height="6" fill="white" stroke="none" />
-                          )}
-                          {territory.status === 'contested' && (
-                            <path d="M6 2 L10 6 L6 10 L2 6 Z" fill="white" stroke="none" />
-                          )}
-                        </g>
-                      </g>
-                    ))}
-
-                    {/* Active routes - showing conquest paths */}
-                    <path
-                      d="M 150 135 Q 250 180 350 205"
-                      fill="none"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth="3"
-                      strokeDasharray="8,4"
-                      className="animate-pulse"
-                    />
-                    <path
-                      d="M 255 365 Q 300 280 440 150"
-                      fill="none"
-                      stroke="hsl(var(--destructive))"
-                      strokeWidth="3"
-                      strokeDasharray="12,6"
-                      className="animate-pulse"
-                      style={{ animationDelay: '0.8s' }}
-                    />
-                    
-                    {/* Overlapping territory indicator */}
-                    <path
-                      d="M 160 270 L 200 260 L 220 290 L 190 310 L 150 305 Z"
-                      fill="hsl(var(--territory-contested) / 0.6)"
-                      stroke="hsl(var(--territory-contested))"
-                      strokeWidth="2"
-                      strokeDasharray="4,4"
-                      className="animate-pulse"
-                    />
-                  </svg>
+                <div className="aspect-[4/3] bg-background/20 relative overflow-hidden rounded-b-lg min-h-[420px]">
+                  {center ? (
+                    <MapContainer center={center} zoom={13} attributionControl={false} className="absolute inset-0" style={{ height: "100%", width: "100%" }}>
+                      <ResizeFix />
+                      <TileLayer url={TILE_URL} />
+                      <Marker position={center}>
+                        <Popup>You are here</Popup>
+                      </Marker>
+                      {territoriesFromApi.map((t) => {
+                        const latlngs = (t.boundary_coordinates || []).map((p) => [p.latitude, p.longitude]) as [number, number][];
+                        if (!latlngs.length) return null;
+                        const color = getTerritoryColor(t.status);
+                        return (
+                          <Polygon key={t.id} positions={latlngs} pathOptions={{ color, fillOpacity: 0.3 }} />
+                        );
+                      })}
+                      <div className="absolute inset-0 pointer-events-none" style={{ mixBlendMode: "multiply", background: "linear-gradient(0deg, rgba(255,102,51,0.06), rgba(255,102,51,0.06))" }} />
+                    </MapContainer>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
+                      Locating your position...
+                    </div>
+                  )}
 
                   {/* Control buttons */}
                   <div className="absolute bottom-4 left-4 flex gap-2">

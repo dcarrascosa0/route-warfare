@@ -1,76 +1,99 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Trophy, Crown, Medal, TrendingUp, MapPin, Route, Target } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { GatewayAPI } from "@/lib/api";
 
 const Leaderboard = () => {
   useEffect(() => {
     document.title = "Leaderboard - Route Wars";
   }, []);
 
-  const topPlayers = [
-    {
-      rank: 1,
-      name: "TerritoryKing",
-      totalArea: "127.3 km²",
-      zones: 89,
-      routes: 342,
-      winRate: "94%",
-      trend: "up",
-      badge: "Crown"
-    },
-    {
-      rank: 2,
-      name: "MapDominator",
-      totalArea: "98.7 km²",
-      zones: 67,
-      routes: 289,
-      winRate: "87%",
-      trend: "up",
-      badge: "Trophy"
-    },
-    {
-      rank: 3,
-      name: "RouteConqueror",
-      totalArea: "82.1 km²",
-      zones: 54,
-      routes: 267,
-      winRate: "91%",
-      trend: "down",
-      badge: "Medal"
-    },
-    {
-      rank: 4,
-      name: "GPSWarrior",
-      totalArea: "76.4 km²",
-      zones: 51,
-      routes: 234,
-      winRate: "83%",
-      trend: "up",
-      badge: null
-    },
-    {
-      rank: 5,
-      name: "ZoneHunter",
-      totalArea: "69.8 km²",
-      zones: 47,
-      routes: 198,
-      winRate: "89%",
-      trend: "stable",
-      badge: null
-    },
-    {
-      rank: 12,
-      name: "You",
-      totalArea: "31.2 km²",
-      zones: 23,
-      routes: 87,
-      winRate: "76%",
-      trend: "up",
-      badge: null
+  const { data: apiData } = useQuery({
+    queryKey: ["leaderboard", "territory"],
+    queryFn: () => GatewayAPI.leaderboard("territory", "ALL_TIME", 0, 10),
+  });
+
+  const topPlayers = useMemo(() => {
+    if (apiData && (apiData as any).ok && (apiData as any).data && (apiData as any).data.entries) {
+      const entries = (apiData as any).data.entries as Array<{ username: string; rank: number; user_stats?: any }>;
+      return entries.slice(0, 6).map((e, idx) => ({
+        rank: e.rank ?? idx + 1,
+        name: e.username ?? `Player ${idx + 1}`,
+        totalArea: `${Math.max(1, Math.round((((e.user_stats?.total_area_km2 as number | undefined) ?? 10) * 10)) / 10)} km²`,
+        zones: e.user_stats?.zones ?? 10,
+        routes: e.user_stats?.routes ?? 20,
+        winRate: `${e.user_stats?.win_rate ?? 75}%`,
+        trend: "up",
+        badge: idx === 0 ? "Crown" : idx === 1 ? "Trophy" : idx === 2 ? "Medal" : null,
+      }));
     }
-  ];
+
+    return [
+      {
+        rank: 1,
+        name: "TerritoryKing",
+        totalArea: "127.3 km²",
+        zones: 89,
+        routes: 342,
+        winRate: "94%",
+        trend: "up",
+        badge: "Crown"
+      },
+      {
+        rank: 2,
+        name: "MapDominator",
+        totalArea: "98.7 km²",
+        zones: 67,
+        routes: 289,
+        winRate: "87%",
+        trend: "up",
+        badge: "Trophy"
+      },
+      {
+        rank: 3,
+        name: "RouteConqueror",
+        totalArea: "82.1 km²",
+        zones: 54,
+        routes: 267,
+        winRate: "91%",
+        trend: "down",
+        badge: "Medal"
+      },
+      {
+        rank: 4,
+        name: "GPSWarrior",
+        totalArea: "76.4 km²",
+        zones: 51,
+        routes: 234,
+        winRate: "83%",
+        trend: "up",
+        badge: null
+      },
+      {
+        rank: 5,
+        name: "ZoneHunter",
+        totalArea: "69.8 km²",
+        zones: 47,
+        routes: 198,
+        winRate: "89%",
+        trend: "stable",
+        badge: null
+      },
+      {
+        rank: 12,
+        name: "You",
+        totalArea: "31.2 km²",
+        zones: 23,
+        routes: 87,
+        winRate: "76%",
+        trend: "up",
+        badge: null
+      }
+    ];
+  }, [apiData]);
 
   const getRankIcon = (rank: number, badge: string | null) => {
     if (badge === "Crown") return <Crown className="w-6 h-6 text-territory-contested" />;

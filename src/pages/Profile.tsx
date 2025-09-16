@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,11 +17,20 @@ import {
   Zap,
   TrendingUp
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { GatewayAPI } from "@/lib/api";
 
 const Profile = () => {
   useEffect(() => {
     document.title = "Profile - Route Wars";
   }, []);
+
+  const userId = useMemo(() => localStorage.getItem("user_id"), []);
+  const { data: me } = useQuery({
+    queryKey: ["me", userId],
+    queryFn: () => (userId ? GatewayAPI.me(userId) : Promise.resolve({ ok: false } as any)),
+    enabled: !!userId,
+  });
 
   const achievements = [
     { id: 1, name: "First Blood", description: "Claim your first territory", icon: Target, earned: true },

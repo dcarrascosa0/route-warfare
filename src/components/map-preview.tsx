@@ -2,9 +2,44 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MapPin, Navigation, Target, Activity } from "lucide-react";
+import { useEffect, useState } from "react";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { Link } from "react-router-dom";
 
+// Fix default marker icon paths for Leaflet when bundled by Vite
+const DefaultIcon = L.icon({
+  iconUrl: new URL("leaflet/dist/images/marker-icon.png", import.meta.url).toString(),
+  iconRetinaUrl: new URL("leaflet/dist/images/marker-icon-2x.png", import.meta.url).toString(),
+  shadowUrl: new URL("leaflet/dist/images/marker-shadow.png", import.meta.url).toString(),
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+});
+// @ts-expect-error - prototype mutation to set default icon
+L.Marker.prototype.options.icon = DefaultIcon;
+
 const MapPreview = () => {
+  const [position, setPosition] = useState<[number, number] | null>(null);
+
+  useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setPosition([pos.coords.latitude, pos.coords.longitude]);
+        },
+        () => {
+          setPosition(null);
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+  }, []);
+
+  const center: [number, number] | null = position ? [position[0], position[1]] : null;
+  const TILE_URL = (import.meta as any)?.env?.VITE_MAP_TILE_URL ??
+    "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+
   return (
     <section className="py-20 px-6">
       <div className="max-w-6xl mx-auto">
@@ -31,36 +66,32 @@ const MapPreview = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="aspect-video bg-background/20 relative overflow-hidden rounded-b-lg">
-                  {/* Mock map interface */}
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,hsl(var(--territory-claimed)/0.4)_20%,transparent_50%)]" />
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_60%,hsl(var(--territory-neutral)/0.3)_15%,transparent_40%)]" />
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_80%,hsl(var(--territory-contested)/0.3)_10%,transparent_30%)]" />
-                  
-                  {/* Mock GPS route */}
-                  <svg className="absolute inset-0 w-full h-full">
-                    <path
-                      d="M 100 150 Q 200 100 300 150 T 500 200 Q 400 250 300 200 Z"
-                      fill="none"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth="3"
-                      strokeDasharray="10,5"
-                      className="animate-pulse"
-                    />
-                  </svg>
-                  
-                  {/* Territory markers */}
-                  <div className="absolute top-1/4 left-1/4 w-3 h-3 bg-territory-claimed rounded-full shadow-territory animate-pulse" />
-                  <div className="absolute top-1/2 right-1/3 w-3 h-3 bg-territory-neutral rounded-full shadow-territory animate-pulse" style={{ animationDelay: '0.5s' }} />
-                  <div className="absolute bottom-1/3 left-1/2 w-3 h-3 bg-territory-contested rounded-full shadow-territory animate-pulse" style={{ animationDelay: '1s' }} />
-                  
+                <div className="aspect-video bg-background/20 relative overflow-hidden rounded-b-lg min-h-[360px]">
+                  {/* Real map centered on user location */}
+                  {center ? (
+                    <MapContainer center={center} zoom={13} attributionControl={false} className="absolute inset-0" style={{ height: "100%", width: "100%" }}>
+                      <TileLayer
+                        url={TILE_URL}
+                      />
+                      <Marker position={center}>
+                        <Popup>You are here</Popup>
+                      </Marker>
+                      {/* Subtle orange tint to blend with app theme */}
+                      <div className="absolute inset-0 pointer-events-none" style={{ mixBlendMode: "multiply", background: "linear-gradient(0deg, rgba(255,102,51,0.08), rgba(255,102,51,0.08))" }} />
+                    </MapContainer>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
+                      Locating your position...
+                    </div>
+                  )}
+
                   {/* Overlay UI */}
                   <div className="absolute top-4 left-4 flex gap-2">
                     <Badge className="bg-territory-claimed/20 text-territory-claimed border-territory-claimed/30">
-                      Your Territory
+                      Map
                     </Badge>
                     <Badge variant="outline" className="border-muted/30">
-                      Live GPS
+                      {position ? "Live GPS" : "Locating..."}
                     </Badge>
                   </div>
                   
