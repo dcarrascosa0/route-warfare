@@ -68,16 +68,16 @@ const MapPreview = () => {
                 <div className="aspect-video bg-background/20 relative overflow-hidden rounded-b-lg min-h-[360px]">
                   {/* Real map centered on user location */}
                   {center ? (
-                    <MapContainer center={center} zoom={13} attributionControl={false} className="absolute inset-0" style={{ height: "100%", width: "100%" }}>
+                    <MapContainer center={center} zoom={13} attributionControl={false} className="absolute inset-0 z-0" style={{ height: "100%", width: "100%" }}>
                       <TileLayer
                         url={TILE_URL}
                       />
                       <Marker position={center}>
                         <Popup>You are here</Popup>
                       </Marker>
-                      {/* Themed overlay for map styling */}
-                      <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-primary/8 via-transparent to-territory-claimed/12 mix-blend-soft-light" />
-                      <div className="absolute inset-0 pointer-events-none border border-primary/20 rounded-b-lg" />
+                      {/* Themed overlay for map styling (above tiles) */}
+                      <div className="absolute inset-0 pointer-events-none z-10 bg-gradient-to-br from-primary/8 via-transparent to-territory-claimed/12 mix-blend-soft-light" />
+                      <div className="absolute inset-0 pointer-events-none z-10 border border-primary/20 rounded-b-lg" />
                     </MapContainer>
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">

@@ -6,8 +6,16 @@ import { componentTagger } from "lovable-tagger";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
-    host: "::",
+    host: "0.0.0.0",
     port: 3000,
+    hmr: {
+      clientPort: 3000,
+      host: process.env.VITE_HMR_HOST || undefined,
+    },
+    watch: {
+      usePolling: true,
+      interval: 300,
+    },
     proxy: {
       "/api": {
         target: process.env.VITE_API_URL || "http://api-gateway:8000",
