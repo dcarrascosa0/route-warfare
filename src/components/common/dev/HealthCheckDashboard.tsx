@@ -36,7 +36,7 @@ const SERVICES = [
 
 export function HealthCheckDashboard() {
   const [systemHealth, setSystemHealth] = useState<SystemHealth>({
-    overall: 'unknown',
+    overall: 'healthy' as const,
     services: [],
     lastUpdated: new Date(),
   });

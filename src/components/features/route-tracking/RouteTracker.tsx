@@ -69,8 +69,8 @@ export default function RouteTracker({
     setIsStopping(true);
     try {
       const route = await stop();
-      if (route && onRouteComplete) {
-        onRouteComplete(route);
+      if (onRouteComplete) {
+        onRouteComplete();
       }
     } catch (error) {
       console.error("Failed to stop route:", error);
@@ -122,7 +122,7 @@ export default function RouteTracker({
             <div className="text-lg font-mono">
               {formatElapsedTime(elapsedMs)}
             </div>
-            <RouteProgress routeId={routeId} />
+            {/* Route progress will be shown in the main routes dashboard */}
           </div>
         )}
 

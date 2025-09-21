@@ -248,7 +248,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
                   className={`
                     p-4 border-l-4 cursor-pointer hover:bg-gray-50 transition-colors
                     ${getPriorityColor(notification.priority)}
-                    ${notification.status === 'read' ? 'opacity-75' : ''}
+                    ${notification.status === 'READ' ? 'opacity-75' : ''}
                   `}
                   onClick={() => markAsRead(notification.id)}
                 >
@@ -263,7 +263,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
                           {notification.title}
                         </h4>
                         <div className="flex items-center gap-1 flex-shrink-0">
-                          {notification.status !== 'read' && (
+                          {notification.status !== 'READ' && (
                             <div className="w-2 h-2 bg-blue-500 rounded-full" />
                           )}
                           <span className="text-xs text-gray-500">

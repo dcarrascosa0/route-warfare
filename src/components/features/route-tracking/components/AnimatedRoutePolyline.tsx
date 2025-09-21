@@ -118,7 +118,7 @@ export default function AnimatedRoutePolyline({
     const segments: Array<{
       coordinates: [number, number][];
       color: string;
-      pathOptions: L.PolylineOptions;
+      pathOptions: any;
     }> = [];
 
     const totalSegments = visibleCoordinates.length - 1;
@@ -138,7 +138,7 @@ export default function AnimatedRoutePolyline({
 
       // Create path options with special styling for closed loops
       const baseStyle = ROUTE_STYLES[status];
-      const pathOptions: L.PolylineOptions = {
+      const pathOptions: any = {
         ...baseStyle,
         color,
         className: cn(

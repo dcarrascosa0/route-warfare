@@ -8,11 +8,11 @@ import {
   Clock, 
   AlertTriangle,
   CheckCircle,
-  Sync,
+  RefreshCw,
   Database,
   CloudOff,
   Cloud,
-  RefreshCw,
+  RotateCcw,
   Trash2,
   Eye,
   Play,
@@ -471,7 +471,7 @@ const OfflineRouteTracker: React.FC<OfflineRouteTrackerProps> = ({
                             size="sm"
                             className="h-8 w-8 p-0"
                             onClick={() => handleSyncRoute(route.id)}
-                            disabled={route.status === 'syncing'}
+                            disabled={false}
                           >
                             <Upload className="w-4 h-4" />
                           </Button>

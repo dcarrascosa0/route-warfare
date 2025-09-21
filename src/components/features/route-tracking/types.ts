@@ -47,7 +47,7 @@ export interface RouteMapProps {
 
 export interface RouteTrackerProps {
     onRouteUpdate?: (coordinates: GPSCoordinate[]) => void;
-    onRouteComplete?: (route: RouteDetail) => void;
+    onRouteComplete?: () => void;
     isActive?: boolean;
 }
 
