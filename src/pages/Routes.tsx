@@ -7,8 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Route, Search, Target, Plus, Trash2, Eye, Calendar, Activity, StopCircle, AlertTriangle, CheckCircle, XCircle, Clock, MapPin, Award, TrendingUp, RefreshCw } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { GatewayAPI } from "@/lib/api";
-import { useRouteTracker } from "@/hooks/useRouteTracker";
-import ActiveRouteTracker from "@/components/features/route-tracking/ActiveRouteTracker";
+import LiveRouteTracker from "@/components/features/route-tracking/LiveRouteTracker";
 import GPSSimulator from "@/components/common/dev/GPSSimulator";
 import RouteMapModal from "@/components/features/route-tracking/RouteMapModal";
 import TerritoryClaimRetry from "@/components/features/territory-management/TerritoryClaimRetry";
@@ -295,110 +294,23 @@ const Routes = () => {
     });
   };
 
-  const tracker = useRouteTracker(userId);
-
-  // Auto-refresh when there's a potential state mismatch
-  useEffect(() => {
-    if (tracker.isTracking && !currentActiveRoute) {
-      // Tracker thinks it's tracking but no active route found - refresh
-      console.log("State mismatch detected: tracker active but no route found, refreshing...");
-      refetchActiveRoute();
-    }
-  }, [tracker.isTracking, currentActiveRoute, refetchActiveRoute]);
-
-  const onStart = async () => {
-    if (!userId) return;
-
-    try {
-      // Use the tracker's start method for consistent state management
-      const success = await tracker.start({
-        name: `Route ${new Date().toLocaleDateString()}`,
-        description: "GPS tracked route"
-      });
-
-      if (success) {
-        // Refresh the queries to update the UI
-        queryClient.invalidateQueries({ queryKey: ["routes", userId] });
-        queryClient.invalidateQueries({ queryKey: ["activeRoute", userId] });
-        // Also invalidate territory queries in case territory was claimed
-        queryClient.invalidateQueries({ queryKey: ["territories"] });
-        queryClient.invalidateQueries({ queryKey: ["userTerritories", userId] });
-        queryClient.invalidateQueries({ queryKey: ["contestedTerritories"] });
-        console.log("Route started successfully");
-      } else {
-        console.error("Failed to start route:", tracker.error);
-        alert(tracker.error || "Failed to start route. Please try again.");
-      }
-    } catch (error) {
-      console.error("Error starting route:", error);
-      alert("Failed to start route. Please try again.");
-    }
+  // Handle route lifecycle events
+  const handleRouteComplete = () => {
+    queryClient.invalidateQueries({ queryKey: ["routes", userId] });
+    queryClient.invalidateQueries({ queryKey: ["activeRoute", userId] });
+    queryClient.invalidateQueries({ queryKey: ["territories"] });
+    queryClient.invalidateQueries({ queryKey: ["userTerritories", userId] });
+    queryClient.invalidateQueries({ queryKey: ["contestedTerritories"] });
   };
-  const onStop = async () => {
-    if (!userId) return;
 
-    try {
-      // Check if we're being called after the route was already completed
-      // (e.g., from ActiveRouteTracker's onComplete callback)
-      const activeRouteCheck = await GatewayAPI.getActiveRoute(userId);
+  const handleRouteStart = () => {
+    queryClient.invalidateQueries({ queryKey: ["routes", userId] });
+    queryClient.invalidateQueries({ queryKey: ["activeRoute", userId] });
+  };
 
-      if (!activeRouteCheck.ok || !activeRouteCheck.data) {
-        // Route is already completed - just clean up local state
-        console.log("Route already completed, cleaning up local state");
-
-        // Clear any active tracking state without calling completion API
-        if (tracker.isTracking) {
-          tracker.cleanup();
-        }
-
-        // Refresh the queries to update the UI
-        queryClient.invalidateQueries({ queryKey: ["routes", userId] });
-        queryClient.invalidateQueries({ queryKey: ["activeRoute", userId] });
-        // Also invalidate territory queries in case territory was claimed
-        queryClient.invalidateQueries({ queryKey: ["territories"] });
-        queryClient.invalidateQueries({ queryKey: ["userTerritories", userId] });
-        queryClient.invalidateQueries({ queryKey: ["contestedTerritories"] });
-        return;
-      }
-
-      // Route is still active - use normal completion flow
-      const success = await tracker.stop(false); // Don't auto-claim territory
-
-      if (success) {
-        queryClient.invalidateQueries({ queryKey: ["routes", userId] });
-        queryClient.invalidateQueries({ queryKey: ["activeRoute", userId] });
-        // Also invalidate territory queries in case territory was claimed
-        queryClient.invalidateQueries({ queryKey: ["territories"] });
-        queryClient.invalidateQueries({ queryKey: ["userTerritories", userId] });
-        queryClient.invalidateQueries({ queryKey: ["contestedTerritories"] });
-        console.log("Route completed successfully");
-        alert("Route completed successfully!");
-      } else {
-        console.error("Failed to complete route:", tracker.error);
-        alert(`Failed to complete route: ${tracker.error || 'Unknown error'}`);
-      }
-
-    } catch (error: any) {
-      console.error("Error completing route:", error);
-
-      // Extract meaningful error message
-      let errorMessage = "Failed to complete route";
-      if (error?.error?.detail) {
-        errorMessage = error.error.detail;
-      } else if (error?.message) {
-        errorMessage = error.message;
-      }
-
-      alert(`Error completing route: ${errorMessage}`);
-
-      // Always refresh state in case of errors
-      queryClient.invalidateQueries({ queryKey: ["routes", userId] });
-      queryClient.invalidateQueries({ queryKey: ["activeRoute", userId] });
-      // Also invalidate territory queries in case of errors
-      queryClient.invalidateQueries({ queryKey: ["territories"] });
-      queryClient.invalidateQueries({ queryKey: ["userTerritories", userId] });
-      queryClient.invalidateQueries({ queryKey: ["contestedTerritories"] });
-    }
+  const handleRouteStop = () => {
+    queryClient.invalidateQueries({ queryKey: ["routes", userId] });
+    queryClient.invalidateQueries({ queryKey: ["activeRoute", userId] });
   };
 
   return (
@@ -412,70 +324,28 @@ const Routes = () => {
                 Track your GPS routes and claim territory by completing closed loops.
               </p>
             </div>
-            <div className="flex gap-2">
-              <Button
-                onClick={() => {
-                  refetchActiveRoute();
-                  queryClient.invalidateQueries({ queryKey: ["routes", userId] });
-                }}
-                variant="outline"
-                disabled={isLoadingActiveRoute}
-              >
-                <Activity className="w-4 h-4 mr-2" />
-                {isLoadingActiveRoute ? "Refreshing..." : "Refresh"}
-              </Button>
-              <Button onClick={onStart} className="bg-gradient-hero hover:shadow-glow" disabled={tracker.isTracking || Boolean(currentActiveRoute)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Start New Route
-              </Button>
-            </div>
+            <Button
+              onClick={() => {
+                refetchActiveRoute();
+                queryClient.invalidateQueries({ queryKey: ["routes", userId] });
+              }}
+              variant="outline"
+              disabled={isLoadingActiveRoute}
+            >
+              <Activity className="w-4 h-4 mr-2" />
+              {isLoadingActiveRoute ? "Refreshing..." : "Refresh"}
+            </Button>
           </div>
 
-          {/* Active Route Status */}
-          {currentActiveRoute && (
-            <div className="mb-6">
-              <ActiveRouteTracker
-                userId={userId!}
-                activeRoute={currentActiveRoute}
-                onComplete={onStop}
-                onStop={onStop}
-              />
-            </div>
-          )}
-
-          {/* State Mismatch Warning */}
-          {tracker.isTracking && !currentActiveRoute && (
-            <Card className="bg-yellow-500/10 border-yellow-500/30 mb-6">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 text-yellow-600">
-                  <AlertTriangle className="w-5 h-5" />
-                  <div>
-                    <p className="font-medium">State Synchronization Issue</p>
-                    <p className="text-sm text-yellow-600/80">
-                      The tracker is active but no route was found. This may indicate a synchronization issue.
-                      <button
-                        onClick={() => {
-                          refetchActiveRoute();
-                          queryClient.invalidateQueries({ queryKey: ["routes", userId] });
-                        }}
-                        className="ml-2 underline hover:no-underline"
-                      >
-                        Click here to refresh
-                      </button>
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {tracker.error && (
-            <Card className="bg-destructive/10 border-destructive/30 mb-6">
-              <CardContent className="p-4">
-                <p className="text-destructive text-sm">{tracker.error}</p>
-              </CardContent>
-            </Card>
-          )}
+          {/* Live Route Tracking */}
+          <div className="mb-8">
+            <LiveRouteTracker
+              userId={userId!}
+              onRouteComplete={handleRouteComplete}
+              onRouteStart={handleRouteStart}
+              onRouteStop={handleRouteStop}
+            />
+          </div>
         </div>
 
         {/* Search and Filters */}
@@ -537,10 +407,9 @@ const Routes = () => {
                       ? "Start your first route to begin claiming territory!"
                       : "No routes match your current filters."}
                   </p>
-                  <Button onClick={onStart} className="bg-gradient-hero hover:shadow-glow" disabled={tracker.isTracking || Boolean(currentActiveRoute)}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Start Your First Route
-                  </Button>
+                  <div className="text-muted-foreground">
+                    Use the live tracker above to start your first route
+                  </div>
                 </CardContent>
               </Card>
             )}

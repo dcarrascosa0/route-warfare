@@ -9,6 +9,7 @@ export { default as RouteMapModal } from './RouteMapModal';
 export { default as ActiveRouteTracker } from './ActiveRouteTracker';
 export { default as EnhancedActiveRouteMap } from './EnhancedActiveRouteMap';
 export { default as RealTimeRouteMap } from './RealTimeRouteMap';
+export { default as LiveRouteTracker } from './LiveRouteTracker';
 export { default as EnhancedRouteVisualization } from './EnhancedRouteVisualization';
 export { default as OfflineRouteTracker } from './OfflineRouteTracker';
 
