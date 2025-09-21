@@ -2,9 +2,6 @@
 export { default as TerritoryList } from './TerritoryList.tsx';
 export { default as TerritoryDetailsModal } from './TerritoryDetailsModal';
 export { default as TerritoryClaimRetry } from './TerritoryClaimRetry';
-export { default as TerritoryMap } from './TerritoryMap';
-export { default as TerritoryPolygon } from './TerritoryPolygon';
-export { default as TerritoryMapControls } from './TerritoryMapControls';
 export { default as ConflictResolutionActions } from './ConflictResolutionActions';
 export { default as OwnershipResolutionHistory } from './OwnershipResolutionHistory';
 export { default as TerritoryConflictVisualization } from './TerritoryConflictVisualization';

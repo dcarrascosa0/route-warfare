@@ -94,8 +94,10 @@ describe('EnhancedActiveRouteMap', () => {
       altitudeAccuracy: null,
       heading: null,
       speed: null,
-    },
+      toJSON: () => ({}),
+    } as GeolocationCoordinates,
     timestamp: Date.now(),
+    toJSON: () => ({}),
   };
 
   const defaultProps = {

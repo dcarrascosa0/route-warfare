@@ -3,6 +3,7 @@
 export interface Territory {
   id: string;
   user_id: string;
+  owner_id?: string;
   route_id: string;
   name?: string;
   description?: string;
@@ -11,6 +12,7 @@ export interface Territory {
   updated_at: string;
   boundary_coordinates: Array<{ latitude: number; longitude: number }>;
   area_sqm: number;
+  area_km2?: number;
   center_lat: number;
   center_lng: number;
   metadata?: Record<string, any>;
@@ -24,6 +26,8 @@ export interface Territory {
   auto_claimed?: boolean;
   conflicts?: any[];
   claim_history?: any[];
+  last_activity?: string;
+  contest_count?: number;
 }
 
 export interface TerritoryConflict {
@@ -48,6 +52,9 @@ export interface TerritoryConflict {
 export interface TerritoryFilter {
   status?: string[];
   userId?: string;
+  owner?: string;
+  minArea?: number;
+  maxArea?: number;
   dateRange?: {
     start: string;
     end: string;
@@ -70,11 +77,13 @@ export interface TerritoryClaimHistory {
 
 export interface TerritoryEvent {
   id: string;
-  type: 'claim' | 'conflict' | 'resolution' | 'transfer';
+  type: 'claim' | 'conflict' | 'resolution' | 'transfer' | 'territory_claimed' | 'territory_attacked' | 'territory_contested' | 'territory_lost' | 'territory_ownership_changed' | 'territory_conflict_resolved';
   territory_id: string;
   user_id: string;
   timestamp: string;
   data: Record<string, any>;
+  territory?: Territory;
+  username?: string;
 }
 
 export interface RouteInfo {

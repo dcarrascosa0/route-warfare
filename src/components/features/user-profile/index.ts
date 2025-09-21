@@ -4,8 +4,6 @@ export { default as AchievementGrid } from './AchievementGrid';
 export { default as AchievementProgress } from './AchievementProgress';
 export { default as UserStats } from './UserStats';
 export { default as LeaderboardEntry } from './LeaderboardEntry';
-export { default as UserStatisticsEnhanced } from './UserStatisticsEnhanced';
-export { default as AchievementProgressEnhanced } from './AchievementProgressEnhanced';
 
 // Types
 export type {

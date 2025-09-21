@@ -17,6 +17,7 @@ interface UseTerritoryUpdatesOptions {
 interface UseTerritoryUpdatesReturn {
   recentUpdates: TerritoryUpdate[];
   animatingTerritories: Set<string>;
+  updates: TerritoryUpdate[];
   clearUpdate: (territoryId: string) => void;
   clearAllUpdates: () => void;
 }
@@ -233,6 +234,7 @@ export const useTerritoryUpdates = (
   return {
     recentUpdates,
     animatingTerritories,
+    updates: recentUpdates,
     clearUpdate,
     clearAllUpdates,
   };

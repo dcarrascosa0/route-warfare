@@ -45,8 +45,10 @@ const createMockPosition = (
         altitudeAccuracy: null,
         speed: speed || null,
         heading: heading || null,
-    },
+        toJSON: () => ({}),
+    } as GeolocationCoordinates,
     timestamp: Date.now(),
+    toJSON: () => ({}),
 });
 
 const renderWithMap = (component: React.ReactElement) => {
@@ -261,8 +263,10 @@ describe('AnimatedCurrentPosition', () => {
                     altitudeAccuracy: null,
                     speed: null,
                     heading: null,
-                },
+                    toJSON: () => ({}),
+                } as GeolocationCoordinates,
                 timestamp: Date.now(),
+                toJSON: () => ({}),
             };
 
             renderWithMap(
