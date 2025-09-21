@@ -12,9 +12,17 @@ export const DefaultIcon = L.icon({
 // Apply default icon
 L.Marker.prototype.options.icon = DefaultIcon as any;
 
-// Basemaps configuration
+// Basemaps configuration - Enhanced visibility options
 export const TILE_DARK_NO_LABELS = "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png";
 export const TILE_DARK_WITH_LABELS = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+
+// High contrast and colorful options for better visibility
+export const TILE_LIGHT_WITH_LABELS = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+export const TILE_VOYAGER = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+export const TILE_POSITRON = "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png";
+
+// Orange-themed tile for better visibility - using OpenStreetMap with custom styling
+export const TILE_ORANGE_STREETS = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 // Custom icons for different marker types
 export const createCustomIcon = (

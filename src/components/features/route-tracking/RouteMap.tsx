@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { RouteMapProps } from "./types";
-import { calculateBounds, calculateCenter, createCustomIcon, TILE_DARK_WITH_LABELS } from "./utils/mapUtils";
+import { calculateBounds, calculateCenter, createCustomIcon, TILE_VOYAGER } from "./utils/mapUtils";
 import MapPanes from "./components/MapPanes";
 import MapResizeFix from "./components/MapResizeFix";
 import L from "leaflet";
@@ -65,8 +65,8 @@ export default function RouteMap({
                 <MapResizeFix />
                 
                 <TileLayer
-                    url={TILE_DARK_WITH_LABELS}
-                    attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+                    url={TILE_VOYAGER}
+                    attribution='&copy; <a href="https://carto.com/">CARTO</a> | &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                     pane="base"
                 />
 
@@ -74,9 +74,9 @@ export default function RouteMap({
                 {routePath.length > 1 && (
                     <Polyline
                         positions={routePath}
-                        color="#3b82f6"
-                        weight={4}
-                        opacity={0.8}
+                        color="#ff6b35"
+                        weight={5}
+                        opacity={0.9}
                         pane="routes"
                     />
                 )}
@@ -84,7 +84,7 @@ export default function RouteMap({
                 {route.status === 'active' && routePath.length === 0 && currentLocation && (
                     <Marker
                         position={[currentLocation.coords.latitude, currentLocation.coords.longitude]}
-                        icon={createCustomIcon('current', { color: '#3b82f6' })}
+                        icon={createCustomIcon('current', { color: '#ff6b35', size: 35 })}
                         pane="routes"
                     />
                 )}
@@ -93,7 +93,7 @@ export default function RouteMap({
                 {route.coordinates.length > 0 && (
                     <Marker
                         position={[route.coordinates[0].latitude, route.coordinates[0].longitude]}
-                        icon={createCustomIcon('start', { color: '#10b981' })}
+                        icon={createCustomIcon('start', { color: '#22c55e', size: 35 })}
                         pane="markers"
                     >
                         <Popup>
@@ -113,7 +113,7 @@ export default function RouteMap({
                             route.coordinates[route.coordinates.length - 1].latitude,
                             route.coordinates[route.coordinates.length - 1].longitude
                         ]}
-                        icon={createCustomIcon('end', { color: '#ef4444' })}
+                        icon={createCustomIcon('end', { color: '#ef4444', size: 35 })}
                         pane="markers"
                     >
                         <Popup>
@@ -133,7 +133,7 @@ export default function RouteMap({
                             currentLocation.coords.latitude,
                             currentLocation.coords.longitude
                         ]}
-                        icon={createCustomIcon('current', { color: '#f59e0b' })}
+                        icon={createCustomIcon('current', { color: '#ff6b35', size: 35 })}
                         pane="markers"
                     >
                         <Popup>
