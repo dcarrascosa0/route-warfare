@@ -1,0 +1,565 @@
+/* Enhanced Route Map Design System */
+
+/* ===== DESIGN TOKENS ===== */
+:root {
+  /* Enhanced Map Color Palette - matching application design system */
+  --map-primary: hsl(var(--primary)); /* Orange theme color */
+  --map-accent: hsl(var(--accent)); /* Cyan accent */
+  --map-background: hsl(var(--background));
+  --map-card: hsl(var(--card));
+  --map-foreground: hsl(var(--foreground));
+  --map-muted: hsl(var(--muted-foreground));
+  
+  /* Territory colors from design system */
+  --map-territory-claimed: hsl(var(--territory-claimed));
+  --map-territory-neutral: hsl(var(--territory-neutral));
+  --map-territory-contested: hsl(var(--territory-contested));
+  
+  /* Enhanced Map Specific Colors */
+  --map-route-active-start: hsl(15 88% 55%); /* Primary orange */
+  --map-route-active-end: hsl(195 100% 50%); /* Accent cyan */
+  --map-route-completed: hsl(215 20% 65%); /* Muted gray */
+  --map-route-cancelled: hsl(0 75% 60%); /* Destructive red */
+  
+  /* GPS Quality Colors */
+  --map-gps-excellent: hsl(142 76% 36%); /* Green-600 */
+  --map-gps-good: hsl(217 91% 60%); /* Blue-500 */
+  --map-gps-fair: hsl(43 96% 56%); /* Yellow-500 */
+  --map-gps-poor: hsl(0 84% 60%); /* Red-500 */
+  
+  /* Glass morphism and backdrop effects */
+  --map-glass-bg: hsl(var(--card) / 0.8);
+  --map-glass-border: hsl(var(--border) / 0.3);
+  --map-backdrop-blur: blur(12px);
+  --map-backdrop-saturate: saturate(180%);
+  
+  /* Shadows and glows */
+  --map-shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.05);
+  --map-shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.1), 0 2px 4px -2px hsl(0 0% 0% / 0.1);
+  --map-shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.1), 0 4px 6px -4px hsl(0 0% 0% / 0.1);
+  --map-shadow-glow: 0 0 20px hsl(var(--primary) / 0.3);
+  --map-shadow-territory: 0 0 30px hsl(var(--territory-claimed) / 0.4);
+  
+  /* Animation timings */
+  --map-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --map-transition-normal: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --map-transition-slow: 500ms cubic-bezier(0.4, 0, 0.2, 1);
+  --map-transition-bounce: 600ms cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  
+  /* Border radius matching design system */
+  --map-radius-sm: calc(var(--radius) - 4px);
+  --map-radius-md: calc(var(--radius) - 2px);
+  --map-radius-lg: var(--radius);
+  --map-radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ===== ENHANCED MAP CONTAINER ===== */
+.enhanced-route-map {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--map-radius-lg);
+  background: var(--map-background);
+  box-shadow: var(--map-shadow-lg);
+  transition: var(--map-transition-normal);
+}
+
+.enhanced-route-map.fullscreen {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Loading state with skeleton animation */
+.enhanced-route-map-loading {
+  background: linear-gradient(
+    90deg,
+    var(--map-card) 25%,
+    hsl(var(--card) / 0.5) 50%,
+    var(--map-card) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ===== GLASS MORPHISM COMPONENTS ===== */
+.map-glass-panel {
+  background: var(--map-glass-bg);
+  backdrop-filter: var(--map-backdrop-blur) var(--map-backdrop-saturate);
+  -webkit-backdrop-filter: var(--map-backdrop-blur) var(--map-backdrop-saturate);
+  border: 1px solid var(--map-glass-border);
+  border-radius: var(--map-radius-md);
+  box-shadow: var(--map-shadow-md);
+  transition: var(--map-transition-normal);
+}
+
+.map-glass-panel:hover {
+  background: hsl(var(--card) / 0.9);
+  border-color: hsl(var(--border) / 0.5);
+  box-shadow: var(--map-shadow-lg);
+  transform: translateY(-1px);
+}
+
+/* Floating statistics panel */
+.floating-stats-panel {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 1000;
+  min-width: 200px;
+  max-width: 300px;
+  padding: 1rem;
+  animation: slide-in-left 0.4s var(--map-transition-bounce);
+}
+
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* ===== MAP CONTROLS STYLING ===== */
+.map-controls-container {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  animation: slide-in-right 0.4s var(--map-transition-bounce);
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.map-control-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  background: var(--map-glass-bg);
+  backdrop-filter: var(--map-backdrop-blur);
+  -webkit-backdrop-filter: var(--map-backdrop-blur);
+  border: 1px solid var(--map-glass-border);
+  border-radius: var(--map-radius-md);
+  color: var(--map-foreground);
+  cursor: pointer;
+  transition: var(--map-transition-fast);
+  box-shadow: var(--map-shadow-sm);
+}
+
+.map-control-button:hover {
+  background: hsl(var(--card) / 0.95);
+  border-color: hsl(var(--primary) / 0.3);
+  color: var(--map-primary);
+  transform: translateY(-1px) scale(1.05);
+  box-shadow: var(--map-shadow-md);
+}
+
+.map-control-button:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: var(--map-shadow-sm);
+}
+
+.map-control-button:focus-visible {
+  outline: 2px solid var(--map-primary);
+  outline-offset: 2px;
+}
+
+/* Control button states */
+.map-control-button.active {
+  background: var(--map-primary);
+  color: hsl(var(--primary-foreground));
+  border-color: var(--map-primary);
+  box-shadow: var(--map-shadow-glow);
+}
+
+.map-control-button.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ===== INTERACTIVE POPUPS AND TOOLTIPS ===== */
+.map-popup {
+  background: var(--map-glass-bg);
+  backdrop-filter: var(--map-backdrop-blur);
+  -webkit-backdrop-filter: var(--map-backdrop-blur);
+  border: 1px solid var(--map-glass-border);
+  border-radius: var(--map-radius-md);
+  padding: 0.75rem;
+  box-shadow: var(--map-shadow-lg);
+  animation: popup-appear 0.2s var(--map-transition-bounce);
+}
+
+@keyframes popup-appear {
+  from {
+    transform: scale(0.8) translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+.map-tooltip {
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--map-radius-sm);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  box-shadow: var(--map-shadow-md);
+  animation: tooltip-appear 0.15s ease-out;
+  max-width: 200px;
+  word-wrap: break-word;
+}
+
+@keyframes tooltip-appear {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ===== ROUTE VISUALIZATION ENHANCEMENTS ===== */
+.enhanced-route-path {
+  transition: var(--map-transition-normal);
+  will-change: stroke-width, opacity, filter;
+}
+
+.enhanced-route-path:hover {
+  stroke-width: 6;
+  filter: drop-shadow(0 0 8px currentColor);
+  cursor: pointer;
+}
+
+/* Route status styling */
+.route-status-active {
+  stroke: var(--map-route-active-start);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.9;
+}
+
+.route-status-completed {
+  stroke: var(--map-route-completed);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.7;
+}
+
+.route-status-cancelled {
+  stroke: var(--map-route-cancelled);
+  stroke-dasharray: 8, 4;
+  opacity: 0.6;
+}
+
+/* Territory eligibility indicator */
+.territory-eligible-path {
+  stroke: var(--map-territory-claimed);
+  filter: drop-shadow(0 0 6px var(--map-territory-claimed));
+  animation: territory-pulse 2s ease-in-out infinite;
+}
+
+@keyframes territory-pulse {
+  0%, 100% {
+    opacity: 0.8;
+    stroke-width: 4;
+  }
+  50% {
+    opacity: 1;
+    stroke-width: 6;
+  }
+}
+
+/* ===== GPS ACCURACY VISUALIZATION ===== */
+.gps-accuracy-circle {
+  transition: var(--map-transition-normal);
+  will-change: opacity, stroke-dasharray;
+}
+
+.gps-quality-excellent {
+  stroke: var(--map-gps-excellent);
+  fill: hsl(142 76% 36% / 0.1);
+}
+
+.gps-quality-good {
+  stroke: var(--map-gps-good);
+  fill: hsl(217 91% 60% / 0.1);
+}
+
+.gps-quality-fair {
+  stroke: var(--map-gps-fair);
+  fill: hsl(43 96% 56% / 0.1);
+  stroke-dasharray: 5, 5;
+}
+
+.gps-quality-poor {
+  stroke: var(--map-gps-poor);
+  fill: hsl(0 84% 60% / 0.1);
+  stroke-dasharray: 3, 7;
+  animation: gps-warning-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes gps-warning-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* ===== CURRENT POSITION MARKER ENHANCEMENTS ===== */
+.enhanced-position-marker {
+  transition: var(--map-transition-normal);
+  will-change: transform;
+}
+
+.enhanced-position-marker.tracking {
+  animation: position-pulse 2s ease-in-out infinite;
+}
+
+@keyframes position-pulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px currentColor);
+  }
+  50% {
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 8px currentColor);
+  }
+}
+
+/* Directional indicator */
+.direction-indicator {
+  transition: var(--map-transition-fast);
+  transform-origin: center;
+}
+
+.direction-indicator.moving {
+  animation: direction-glow 1s ease-in-out infinite alternate;
+}
+
+@keyframes direction-glow {
+  from { filter: drop-shadow(0 0 2px currentColor); }
+  to { filter: drop-shadow(0 0 6px currentColor); }
+}
+
+/* ===== RESPONSIVE DESIGN ===== */
+@media (max-width: 768px) {
+  .floating-stats-panel {
+    position: fixed;
+    bottom: 1rem;
+    left: 1rem;
+    right: 1rem;
+    top: auto;
+    max-width: none;
+    animation: slide-up 0.4s var(--map-transition-bounce);
+  }
+  
+  .map-controls-container {
+    bottom: 5rem;
+    top: auto;
+    right: 1rem;
+  }
+  
+  .map-control-button {
+    width: 3rem;
+    height: 3rem;
+  }
+  
+  .enhanced-route-path {
+    stroke-width: 5; /* Thicker for better touch interaction */
+  }
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ===== ACCESSIBILITY ENHANCEMENTS ===== */
+@media (prefers-reduced-motion: reduce) {
+  .enhanced-route-map,
+  .map-glass-panel,
+  .map-control-button,
+  .enhanced-route-path,
+  .enhanced-position-marker,
+  .gps-accuracy-circle {
+    animation: none;
+    transition: none;
+  }
+  
+  .territory-eligible-path {
+    animation: none;
+  }
+  
+  .gps-quality-poor {
+    animation: none;
+    opacity: 0.8;
+  }
+}
+
+@media (prefers-contrast: high) {
+  .map-glass-panel {
+    background: var(--map-card);
+    border-color: var(--map-foreground);
+  }
+  
+  .map-control-button {
+    background: var(--map-card);
+    border-color: var(--map-foreground);
+    border-width: 2px;
+  }
+  
+  .enhanced-route-path {
+    stroke-width: 6;
+    opacity: 1;
+  }
+}
+
+/* Focus indicators for keyboard navigation */
+.map-interactive:focus-visible {
+  outline: 2px solid var(--map-primary);
+  outline-offset: 2px;
+  border-radius: var(--map-radius-sm);
+}
+
+/* ===== DARK MODE OPTIMIZATIONS ===== */
+@media (prefers-color-scheme: dark) {
+  .map-glass-panel {
+    background: hsl(var(--card) / 0.9);
+    border-color: hsl(var(--border) / 0.4);
+  }
+  
+  .enhanced-route-path {
+    filter: brightness(1.1);
+  }
+  
+  .gps-accuracy-circle {
+    opacity: 0.8;
+  }
+}
+
+/* ===== PRINT STYLES ===== */
+@media print {
+  .enhanced-route-map {
+    box-shadow: none;
+    border: 1px solid #000;
+  }
+  
+  .map-glass-panel,
+  .floating-stats-panel,
+  .map-controls-container {
+    display: none;
+  }
+  
+  .enhanced-route-path,
+  .enhanced-position-marker,
+  .gps-accuracy-circle {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* ===== UTILITY CLASSES ===== */
+.map-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+.map-slide-up {
+  animation: slide-up 0.4s ease-out;
+}
+
+.map-scale-in {
+  animation: scale-in 0.2s ease-out;
+}
+
+.map-bounce-in {
+  animation: bounce-in 0.6s var(--map-transition-bounce);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes bounce-in {
+  from {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Hover effects for interactive elements */
+.map-hover-lift {
+  transition: var(--map-transition-fast);
+}
+
+.map-hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--map-shadow-lg);
+}
+
+.map-hover-glow {
+  transition: var(--map-transition-fast);
+}
+
+.map-hover-glow:hover {
+  box-shadow: var(--map-shadow-glow);
+}
+
+.map-hover-scale {
+  transition: var(--map-transition-fast);
+}
+
+.map-hover-scale:hover {
+  transform: scale(1.02);
+}

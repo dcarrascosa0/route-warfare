@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+// @ts-ignore
 import {
   MapContainer,
   TileLayer,
@@ -9,12 +10,14 @@ import {
   ZoomControl,
   Circle,
 } from "react-leaflet";
+// @ts-ignore
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import TerritoryDetailsModal from "@/components/territory-details-modal";
+import { Input } from "@/components/ui/input";
+import { TerritoryDetailsModal } from "@/components/features/territory-management";
 import { toast } from "sonner";
 import {
   MapPin,
@@ -25,9 +28,21 @@ import {
   Users,
   Maximize2,
   RefreshCw,
+  Shield,
+  Swords,
+  Calendar,
+  BarChart3,
+  Eye,
+  AlertTriangle,
+  Search,
+  Route,
+  Filter,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { GatewayAPI } from "@/lib/api";
+import RouteTerritoryFilter from "@/components/features/territory-management/RouteTerritoryFilter";
+import GroupedTerritoryDisplay from "@/components/features/territory-management/GroupedTerritoryDisplay";
+import { useRouteTerritoryFilter } from "@/hooks/useRouteTerritoryFilter";
 
 // Fix default Leaflet marker icons for Vite bundling
 const DefaultIcon = L.icon({
@@ -41,21 +56,90 @@ L.Marker.prototype.options.icon = DefaultIcon as any;
 
 // Types
 type GeoPoint = { longitude: number; latitude: number };
-type Territory = { id: string; status?: string; boundary_coordinates: GeoPoint[] };
+
+interface RouteInfo {
+  id: string;
+  name: string;
+  user_id: string;
+  completed_at: string;
+  distance_meters: number;
+  duration_seconds: number;
+  coordinate_count: number;
+  is_closed: boolean;
+}
+
+interface Territory {
+  id: string;
+  name?: string;
+  description?: string;
+  owner_id: string;
+  owner_username?: string;
+  route_id: string;
+  source_route_id?: string;
+  claiming_method?: string;
+  source_route?: RouteInfo;
+  status: "claimed" | "contested" | "neutral";
+  area_km2: number;
+  claimed_at: string;
+  last_activity: string;
+  boundary_coordinates: GeoPoint[];
+  contested_by?: string[];
+}
+
+interface UserTerritoryStats {
+  total_territories: number;
+  total_area_km2: number;
+  claimed_territories: number;
+  contested_territories: number;
+  neutral_territories: number;
+}
 
 type TerritoryMapResponse = { territories: Territory[] };
 
-function getTerritoryColor(status: string | undefined): string {
+function getTerritoryColor(status: string | undefined, isOwned: boolean = false): string {
+  if (isOwned) {
+    switch ((status || "").toLowerCase()) {
+      case "claimed":
+        return "#10b981"; // green for owned claimed
+      case "contested":
+        return "#f59e0b"; // amber for owned contested
+      default:
+        return "#10b981"; // default green for owned
+    }
+  }
+
   switch ((status || "").toLowerCase()) {
     case "claimed":
-      return "#fb5a2c"; // orange
+      return "#ef4444"; // red for enemy claimed
     case "contested":
-      return "#fbbf24"; // amber
+      return "#f59e0b"; // amber for contested
     case "neutral":
-      return "#22d3ee"; // cyan
+      return "#6b7280"; // gray for neutral
     default:
-      return "#3b82f6"; // blue
+      return "#3b82f6"; // blue default
   }
+}
+
+function getTerritoryIcon(status: string) {
+  switch (status) {
+    case "claimed":
+      return Shield;
+    case "contested":
+      return Swords;
+    case "neutral":
+      return MapPin;
+    default:
+      return MapPin;
+  }
+}
+
+function formatDate(dateString: string) {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 }
 
 function Panes() {
@@ -93,12 +177,20 @@ const TILE_DARK_WITH_LABELS =
   "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 
 export default function TerritoryPage() {
-  const [selectedTerritory, setSelectedTerritory] = useState<string | null>(null);
+  const [selectedTerritory, setSelectedTerritory] = useState<Territory | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"all" | "owned" | "contested" | "route-based" | "neutral">("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [routeFilter, setRouteFilter] = useState<"all" | "route-created" | "other">("all");
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all");
+  const [groupBy, setGroupBy] = useState<"none" | "date" | "route" | "status">("none");
+  const [showRouteFilter, setShowRouteFilter] = useState(false);
+
+  const userId = useMemo(() => localStorage.getItem("user_id"), []);
 
   // Page title
   useEffect(() => {
-    document.title = "Territory Map — Route Wars";
+    document.title = "Territory Control — Route Wars";
   }, []);
 
   // Geolocation (with accuracy + follow toggle)
@@ -117,7 +209,7 @@ export default function TerritoryPage() {
           setCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
           setAccuracy(pos.coords.accuracy || null);
         },
-        () => {},
+        () => { },
         { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
       );
       return () => {
@@ -142,41 +234,238 @@ export default function TerritoryPage() {
 
   // Fetch territories near the user (bbox around position; world until we have GPS)
   const { data: mapData, isFetching, refetch } = useQuery({
-    queryKey: ["territories", "map", coords?.latitude, coords?.longitude],
+    queryKey: ["territories", "map", coords?.latitude, coords?.longitude, viewMode],
     queryFn: async () => {
       if (!coords) {
-        return GatewayAPI.territoriesMap({
-          min_longitude: -180,
-          min_latitude: -90,
-          max_longitude: 180,
-          max_latitude: 90,
-          limit: 50,
-        });
+        return GatewayAPI.territoriesMap({});
       }
       const dLat = 0.2;
       const dLon = 0.2;
       return GatewayAPI.territoriesMap({
-        min_longitude: coords.longitude - dLon,
         min_latitude: coords.latitude - dLat,
-        max_longitude: coords.longitude + dLon,
         max_latitude: coords.latitude + dLat,
-        limit: 50,
+        min_longitude: coords.longitude - dLon,
+        max_longitude: coords.longitude + dLon
       });
     },
   });
 
-  const territoriesFromApi: Territory[] =
-    (mapData?.ok && mapData.data && (mapData.data as any).territories) ? 
-    (mapData.data as any).territories : [];
+  // Fetch user's territories
+  const { data: userTerritories } = useQuery({
+    queryKey: ["userTerritories", userId],
+    queryFn: () => (userId ? GatewayAPI.getUserTerritories(userId) : Promise.resolve({ ok: false } as any)),
+    enabled: !!userId,
+  });
+
+  // Fetch contested territories
+  const { data: contestedTerritories } = useQuery({
+    queryKey: ["contestedTerritories"],
+    queryFn: () => GatewayAPI.getContestedTerritories(),
+  });
+
+  const territoriesFromApi: Territory[] = useMemo(() => {
+    return (mapData?.ok && mapData.data && (mapData.data as any).territories) ?
+      (mapData.data as any).territories : [];
+  }, [mapData]);
+
+  // Route-based territory filtering
+  const {
+    filters: routeFilters,
+    filteredTerritories: routeFilteredTerritories,
+    groupedTerritories: routeGroupedTerritories,
+    filterStats: routeFilterStats,
+    availableRoutes,
+    hasActiveFilters: hasActiveRouteFilters,
+    isLoading: isLoadingRouteFilter,
+    updateFilter: updateRouteFilter,
+    clearAllFilters: clearAllRouteFilters
+  } = useRouteTerritoryFilter(territoriesFromApi, {
+    ownerFilter: viewMode === "owned" ? userId || undefined : undefined
+  });
+
+  const userTerritoriesData: Territory[] = useMemo(() => {
+    return (userTerritories?.ok && userTerritories.data) ?
+      (userTerritories.data as any).territories || [] : [];
+  }, [userTerritories]);
+
+  const contestedTerritoriesData: Territory[] = useMemo(() => {
+    return (contestedTerritories?.ok && contestedTerritories.data) ?
+      (contestedTerritories.data as any).territories || [] : [];
+  }, [contestedTerritories]);
+
+  // Calculate user territory stats
+  const territoryStats: UserTerritoryStats = useMemo(() => {
+    const userOwned = territoriesFromApi.filter(t => t.owner_id === userId);
+    return {
+      total_territories: userOwned.length,
+      total_area_km2: userOwned.reduce((sum, t) => sum + t.area_km2, 0),
+      claimed_territories: userOwned.filter(t => t.status === "claimed").length,
+      contested_territories: userOwned.filter(t => t.status === "contested").length,
+      neutral_territories: userOwned.filter(t => t.status === "neutral").length,
+    };
+  }, [territoriesFromApi, userId]);
+
+  // Filter territories based on view mode and additional filters
+  const filteredTerritories = useMemo(() => {
+    // Use route-filtered territories if route filtering is active
+    if (showRouteFilter || hasActiveRouteFilters) {
+      return routeFilteredTerritories;
+    }
+
+    let filtered = territoriesFromApi;
+
+    // Apply view mode filter
+    switch (viewMode) {
+      case "owned":
+        filtered = filtered.filter(t => t.owner_id === userId);
+        break;
+      case "contested":
+        filtered = filtered.filter(t => t.status === "contested");
+        break;
+      case "route-based":
+        filtered = filtered.filter(t => t.source_route_id || t.claiming_method === 'route_completion');
+        break;
+      case "neutral":
+        filtered = filtered.filter(t => t.status === "neutral");
+        break;
+      default:
+        // "all" - no additional filtering
+        break;
+    }
+
+    // Apply route filter
+    if (routeFilter !== "all") {
+      if (routeFilter === "route-created") {
+        filtered = filtered.filter(t => t.source_route_id || t.claiming_method === 'route_completion');
+      } else if (routeFilter === "other") {
+        filtered = filtered.filter(t => !t.source_route_id && t.claiming_method !== 'route_completion');
+      }
+    }
+
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const search = searchTerm.toLowerCase();
+      filtered = filtered.filter(t =>
+        (t.name && t.name.toLowerCase().includes(search)) ||
+        (t.owner_username && t.owner_username.toLowerCase().includes(search)) ||
+        (t.source_route?.name && t.source_route.name.toLowerCase().includes(search)) ||
+        t.id.toLowerCase().includes(search)
+      );
+    }
+
+    // Apply date filter
+    if (dateFilter !== "all") {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      filtered = filtered.filter(t => {
+        const claimedDate = new Date(t.claimed_at);
+        switch (dateFilter) {
+          case "today":
+            return claimedDate >= today;
+          case "week":
+            return claimedDate >= weekAgo;
+          case "month":
+            return claimedDate >= monthAgo;
+          default:
+            return true;
+        }
+      });
+    }
+
+    return filtered;
+  }, [territoriesFromApi, viewMode, userId, routeFilter, searchTerm, dateFilter, showRouteFilter, hasActiveRouteFilters, routeFilteredTerritories]);
+
+  // Transform simple grouped territories to the expected format
+  const transformGroupedTerritories = (simpleGroups: Record<string, Territory[]>) => {
+    const transformed: Record<string, { territories: Territory[]; count: number; totalArea: number; metadata?: Record<string, any> }> = {};
+    
+    Object.entries(simpleGroups).forEach(([key, territories]) => {
+      const totalArea = territories.reduce((sum, t) => sum + (t.area_km2 || 0), 0);
+      transformed[key] = {
+        territories,
+        count: territories.length,
+        totalArea,
+        metadata: {}
+      };
+    });
+    
+    return transformed;
+  };
+
+  // Group territories if grouping is enabled
+  const groupedTerritories = useMemo(() => {
+    // Use route-grouped territories if route filtering is active
+    if (showRouteFilter || hasActiveRouteFilters) {
+      return transformGroupedTerritories(routeGroupedTerritories);
+    }
+
+    if (groupBy === "none") {
+      return transformGroupedTerritories({ "All Territories": filteredTerritories });
+    }
+
+    const groups: Record<string, Territory[]> = {};
+
+    filteredTerritories.forEach(territory => {
+      let groupKey = "";
+
+      switch (groupBy) {
+        case "date":
+          const claimedDate = new Date(territory.claimed_at);
+          const today = new Date();
+          const diffTime = today.getTime() - claimedDate.getTime();
+          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+          if (diffDays === 0) groupKey = "Today";
+          else if (diffDays === 1) groupKey = "Yesterday";
+          else if (diffDays <= 7) groupKey = "This Week";
+          else if (diffDays <= 30) groupKey = "This Month";
+          else groupKey = "Older";
+          break;
+
+        case "route":
+          if (territory.source_route_id || territory.claiming_method === 'route_completion') {
+            groupKey = territory.source_route?.name || `Route ${territory.source_route_id?.slice(0, 8) || 'Unknown'}`;
+          } else {
+            groupKey = "Non-Route Territories";
+          }
+          break;
+
+        case "status":
+          groupKey = territory.status.charAt(0).toUpperCase() + territory.status.slice(1);
+          break;
+
+        default:
+          groupKey = "All Territories";
+      }
+
+      if (!groups[groupKey]) {
+        groups[groupKey] = [];
+      }
+      groups[groupKey].push(territory);
+    });
+
+    return transformGroupedTerritories(groups);
+  }, [filteredTerritories, groupBy, showRouteFilter, hasActiveRouteFilters, routeGroupedTerritories]);
+
+
 
   // UI handlers
-  const handleTerritoryClick = (territoryId: string) => {
-    setSelectedTerritory(territoryId);
+  const handleTerritoryClick = (territory: Territory) => {
+    setSelectedTerritory(territory);
     setIsModalOpen(true);
   };
 
   const handlePlanRoute = () => {
     toast("Route planner opened", { description: "Select your starting point and destination" });
+  };
+
+  const handleViewRoute = (routeId: string) => {
+    // Navigate to route details page or open route modal
+    toast("Route details", { description: `Opening route ${routeId.slice(0, 8)}...` });
+    // TODO: Implement route navigation
   };
 
   // ====== Small helper components that need the map instance ======
@@ -241,18 +530,223 @@ export default function TerritoryPage() {
   // Basemap toggle (labels vs. no-labels + orange tint)
   // Labels are always on; keep a dedicated no-label overlay for orange tint
 
-  const activeRoutes = [
-    { id: "1", user: "MikeRuns", target: "Your Central Park Zone", eta: "12 min", threat: "high" },
-    { id: "2", user: "You", target: "Alex_Runner's Downtown", eta: "8 min", threat: "none" },
-    { id: "3", user: "RouteKing", target: "Neutral Riverside", eta: "15 min", threat: "medium" },
-  ];
-
   return (
     <div className="min-h-screen bg-background">
       <main className="max-w-7xl mx-auto px-6 py-8">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Territory Control</h1>
-          <p className="text-xl text-muted-foreground">Monitor your zones, track enemy movements, and plan your next conquest.</p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-4xl font-bold mb-2">Territory Control</h1>
+              <p className="text-xl text-muted-foreground">Monitor your zones, track enemy movements, and plan your next conquest.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: "all", label: "All Territories" },
+                { key: "owned", label: "Owned" },
+                { key: "contested", label: "Contested" },
+                { key: "route-based", label: "Route-Based" },
+                { key: "neutral", label: "Neutral" }
+              ].map((mode) => (
+                <Button
+                  key={mode.key}
+                  variant={viewMode === mode.key ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setViewMode(mode.key as any)}
+                  className="capitalize"
+                >
+                  {mode.label}
+                </Button>
+              ))}
+              <Button
+                variant={showRouteFilter ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowRouteFilter(!showRouteFilter)}
+                className="ml-2"
+              >
+                <Route className="w-4 h-4 mr-1" />
+                Route Filters
+              </Button>
+            </div>
+          </div>
+
+          {/* Advanced Filters */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search territories, owners, routes..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            {/* Route Filter */}
+            <div className="flex gap-2">
+              <Filter className="w-4 h-4 text-muted-foreground mt-2" />
+              <div className="flex gap-1">
+                {[
+                  { key: "all", label: "All Types" },
+                  { key: "route-created", label: "Route-Created" },
+                  { key: "other", label: "Other" }
+                ].map((filter) => (
+                  <Button
+                    key={filter.key}
+                    variant={routeFilter === filter.key ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setRouteFilter(filter.key as any)}
+                    className="text-xs"
+                  >
+                    {filter.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Date Filter */}
+            <div className="flex gap-2">
+              <Calendar className="w-4 h-4 text-muted-foreground mt-2" />
+              <div className="flex gap-1">
+                {[
+                  { key: "all", label: "All Time" },
+                  { key: "today", label: "Today" },
+                  { key: "week", label: "Week" },
+                  { key: "month", label: "Month" }
+                ].map((filter) => (
+                  <Button
+                    key={filter.key}
+                    variant={dateFilter === filter.key ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setDateFilter(filter.key as any)}
+                    className="text-xs"
+                  >
+                    {filter.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Grouping */}
+            <div className="flex gap-2">
+              <BarChart3 className="w-4 h-4 text-muted-foreground mt-2" />
+              <div className="flex gap-1">
+                {[
+                  { key: "none", label: "No Grouping" },
+                  { key: "date", label: "By Date" },
+                  { key: "route", label: "By Route" },
+                  { key: "status", label: "By Status" }
+                ].map((group) => (
+                  <Button
+                    key={group.key}
+                    variant={groupBy === group.key ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setGroupBy(group.key as any)}
+                    className="text-xs"
+                  >
+                    {group.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Route-Based Territory Filtering */}
+          {showRouteFilter && (
+            <RouteTerritoryFilter
+              territories={territoriesFromApi}
+              onFilterChange={(filtered, filters) => {
+                // The hook handles the filtering automatically
+              }}
+              initialFilters={{}}
+            />
+          )}
+
+          {/* Filter Summary */}
+          {(searchTerm || routeFilter !== "all" || dateFilter !== "all" || viewMode !== "all" || groupBy !== "none") && (
+            <div className="mb-4 p-3 bg-card/50 rounded-lg border border-border/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                  <Filter className="w-4 h-4 text-muted-foreground" />
+                  <span className="font-medium">Active Filters:</span>
+                  <div className="flex gap-2">
+                    {viewMode !== "all" && (
+                      <Badge variant="secondary" className="text-xs">
+                        View: {viewMode}
+                      </Badge>
+                    )}
+                    {routeFilter !== "all" && (
+                      <Badge variant="secondary" className="text-xs">
+                        Type: {routeFilter}
+                      </Badge>
+                    )}
+                    {dateFilter !== "all" && (
+                      <Badge variant="secondary" className="text-xs">
+                        Date: {dateFilter}
+                      </Badge>
+                    )}
+                    {searchTerm && (
+                      <Badge variant="secondary" className="text-xs">
+                        Search: "{searchTerm}"
+                      </Badge>
+                    )}
+                    {groupBy !== "none" && (
+                      <Badge variant="secondary" className="text-xs">
+                        Group: {groupBy}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">
+                    {filteredTerritories.length} result{filteredTerritories.length !== 1 ? 's' : ''}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSearchTerm("");
+                      setRouteFilter("all");
+                      setDateFilter("all");
+                      setViewMode("all");
+                      setGroupBy("none");
+                    }}
+                    className="text-xs"
+                  >
+                    Clear All
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Territory Stats Summary */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <Card className="bg-card/80 border-border/50">
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-territory-claimed">{territoryStats.total_territories}</div>
+                <div className="text-sm text-muted-foreground">Your Territories</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-card/80 border-border/50">
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-primary">{territoryStats.total_area_km2.toFixed(1)} km²</div>
+                <div className="text-sm text-muted-foreground">Total Area</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-card/80 border-border/50">
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-territory-contested">{territoryStats.contested_territories}</div>
+                <div className="text-sm text-muted-foreground">Contested</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-card/80 border-border/50">
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-muted-foreground">{filteredTerritories.length}</div>
+                <div className="text-sm text-muted-foreground">Visible</div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8">
@@ -267,7 +761,10 @@ export default function TerritoryPage() {
                   </CardTitle>
                   <div className="flex flex-wrap gap-2 items-center">
                     <Badge className="bg-territory-claimed/20 text-territory-claimed border-territory-claimed/30 text-xs sm:text-sm">
-                      Your Zones: 3
+                      Your Zones: {territoryStats.total_territories}
+                    </Badge>
+                    <Badge className="bg-primary/20 text-primary border-primary/30 text-xs sm:text-sm">
+                      {territoryStats.total_area_km2.toFixed(1)} km²
                     </Badge>
                     <Badge variant="outline" className="border-muted/30 text-xs sm:text-sm">
                       {followMe ? "Live GPS" : "GPS Paused"}
@@ -306,27 +803,59 @@ export default function TerritoryPage() {
                       )}
 
                       {/* Territories */}
-                      {territoriesFromApi.map((t) => {
+                      {filteredTerritories.map((t) => {
                         const latlngs = (t.boundary_coordinates || []).map((p) => [p.latitude, p.longitude]) as [number, number][];
                         if (!latlngs.length) return null;
-                        const color = getTerritoryColor(t.status);
+                        const isOwned = t.owner_id === userId;
+                        const color = getTerritoryColor(t.status, isOwned);
+                        const IconComponent = getTerritoryIcon(t.status);
+
                         return (
                           <Polygon
                             key={t.id}
                             positions={latlngs}
-                            pathOptions={{ color, weight: 2, fillColor: color, fillOpacity: 0.25 }}
+                            pathOptions={{
+                              color,
+                              weight: isOwned ? 3 : 2,
+                              fillColor: color,
+                              fillOpacity: isOwned ? 0.35 : 0.25,
+                              dashArray: t.status === "contested" ? "5, 5" : undefined
+                            }}
                             eventHandlers={{
-                              click: () => handleTerritoryClick(t.id),
-                              mouseover: (e) => (e.target as any).setStyle({ weight: 3, fillOpacity: 0.35 }),
-                              mouseout: (e) => (e.target as any).setStyle({ weight: 2, fillOpacity: 0.25 }),
+                              click: () => handleTerritoryClick(t),
+                              mouseover: (e) => (e.target as any).setStyle({ weight: isOwned ? 4 : 3, fillOpacity: isOwned ? 0.45 : 0.35 }),
+                              mouseout: (e) => (e.target as any).setStyle({ weight: isOwned ? 3 : 2, fillOpacity: isOwned ? 0.35 : 0.25 }),
                             }}
                           >
                             <Popup>
-                              <div className="text-sm">
-                                <div className="font-semibold mb-1">Territory #{t.id}</div>
-                                <div>Status: <span className="font-medium" style={{ color }}>{t.status || "unknown"}</span></div>
-                                <div>Vertices: {latlngs.length}</div>
-                                <div className="mt-2 text-xs text-muted-foreground">Click for details</div>
+                              <div className="text-sm min-w-[200px]">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <IconComponent className="w-4 h-4" style={{ color }} />
+                                  <div className="font-semibold">{t.name || `Territory ${t.id.slice(0, 8)}`}</div>
+                                </div>
+                                <div className="space-y-1">
+                                  <div>Owner: <span className="font-medium">{isOwned ? "You" : t.owner_username || "Unknown"}</span></div>
+                                  <div>Status: <span className="font-medium capitalize" style={{ color }}>{t.status}</span></div>
+                                  <div>Area: <span className="font-medium">{t.area_km2.toFixed(2)} km²</span></div>
+                                  <div>Claimed: <span className="font-medium">{formatDate(t.claimed_at)}</span></div>
+                                  {t.status === "contested" && t.contested_by && (
+                                    <div>Contested by: <span className="font-medium">{t.contested_by.length} players</span></div>
+                                  )}
+                                </div>
+                                <div className="mt-2 pt-2 border-t">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="w-full text-xs"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleTerritoryClick(t);
+                                    }}
+                                  >
+                                    <Eye className="w-3 h-3 mr-1" />
+                                    View Details
+                                  </Button>
+                                </div>
                               </div>
                             </Popup>
                           </Polygon>
@@ -384,6 +913,19 @@ export default function TerritoryPage() {
                     </div>
                   )}
 
+                  {/* Empty state overlay when no territories */}
+                  {center && filteredTerritories.length === 0 && !isFetching && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-[400]">
+                      <div className="text-center p-6">
+                        <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                        <h3 className="font-semibold mb-2">No Territories Found</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Complete closed-loop routes to claim your first territory!
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Softer cinematic overlays (dialed-back for clarity) */}
                   <div className="rw-map-ui absolute inset-0 pointer-events-none z-[500]">
                     <div className="absolute inset-0 bg-gradient-to-br from-orange-500/6 via-transparent to-primary/10" />
@@ -434,85 +976,163 @@ export default function TerritoryPage() {
               <CardContent className="space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium">Total Zones</span>
-                  <span className="text-2xl font-bold text-territory-claimed">3</span>
+                  <span className="text-2xl font-bold text-territory-claimed">{territoryStats.total_territories}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium">Total Area</span>
-                  <span className="text-2xl font-bold text-primary">4.7 km²</span>
+                  <span className="text-2xl font-bold text-primary">{territoryStats.total_area_km2.toFixed(1)} km²</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Empire Rank</span>
-                  <span className="text-2xl font-bold text-territory-neutral">#12</span>
+                  <span className="text-sm font-medium">Claimed</span>
+                  <span className="text-lg font-bold text-territory-claimed">{territoryStats.claimed_territories}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Contested</span>
+                  <span className="text-lg font-bold text-territory-contested">{territoryStats.contested_territories}</span>
                 </div>
                 <div className="pt-2">
-                  <Button className="w-full bg-gradient-hero hover:shadow-glow">Expand Territory</Button>
+                  <Button
+                    className="w-full bg-gradient-hero hover:shadow-glow"
+                    onClick={() => toast("Start a new route to expand your territory!", { description: "Complete closed-loop routes to claim new areas" })}
+                  >
+                    Expand Territory
+                  </Button>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Active Routes */}
+            {/* Route-Based Territory Display */}
+            {(showRouteFilter || hasActiveRouteFilters) && (
+              <Card className="bg-card/80 border-border/50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Route className="w-5 h-5 text-primary" />
+                    Filtered Territories
+                    {isLoadingRouteFilter && (
+                      <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" />
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="max-h-96 overflow-y-auto">
+                    <GroupedTerritoryDisplay
+                      groupedTerritories={transformGroupedTerritories(routeGroupedTerritories)}
+                      onTerritoryClick={handleTerritoryClick}
+                      onViewRoute={handleViewRoute}
+                      currentUserId={userId || undefined}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Recent Territories */}
             <Card className="bg-card/80 border-border/50">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Activity className="w-5 h-5 text-territory-contested" />
-                  Active Routes
+                  <BarChart3 className="w-5 h-5 text-territory-contested" />
+                  Recent Activity
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {activeRoutes.map((route) => (
-                  <div key={route.id} className="flex items-center justify-between p-2 rounded-lg bg-background/50">
+                {userTerritoriesData.slice(0, 3).map((territory) => (
+                  <div key={territory.id} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div
-                        className={`w-2 h-2 rounded-full ${
-                          route.threat === "high"
-                            ? "bg-destructive"
-                            : route.threat === "medium"
-                            ? "bg-territory-contested"
-                            : "bg-territory-neutral"
-                        }`}
-                      />
+                      {React.createElement(getTerritoryIcon(territory.status), {
+                        className: "w-4 h-4",
+                        style: { color: getTerritoryColor(territory.status, true) }
+                      })}
                       <div>
-                        <p className="text-xs font-medium">{route.user}</p>
-                        <p className="text-xs text-muted-foreground">{route.target}</p>
+                        <div className="text-sm font-medium">{territory.name || `Territory ${territory.id.slice(0, 8)}`}</div>
+                        <div className="text-xs text-muted-foreground">{formatDate(territory.claimed_at)}</div>
                       </div>
                     </div>
-                    <Badge variant="outline" className="text-xs">
-                      {route.eta}
+                    <Badge
+                      className="text-xs"
+                      style={{
+                        backgroundColor: `${getTerritoryColor(territory.status, true)}20`,
+                        color: getTerritoryColor(territory.status, true)
+                      }}
+                    >
+                      {territory.area_km2.toFixed(1)} km²
                     </Badge>
                   </div>
                 ))}
+                {userTerritoriesData.length === 0 && (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    No territories yet. Complete a closed-loop route to claim your first territory!
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* Enemy Territories */}
+            {/* Nearby Territories */}
             <Card className="bg-card/80 border-border/50">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Users className="w-5 h-5 text-destructive" />
-                  Nearby Enemies
+                  Nearby Players
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">FastTracker</span>
-                  <Badge variant="destructive" className="text-xs">
-                    3.1 km²
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Alex_Runner</span>
-                  <Badge variant="destructive" className="text-xs">
-                    1.8 km²
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">SpeedDemon</span>
-                  <Badge className="bg-territory-contested/20 text-territory-contested text-xs">
-                    Contested
-                  </Badge>
-                </div>
+                {filteredTerritories
+                  .filter(t => t.owner_id !== userId)
+                  .slice(0, 5)
+                  .map((territory) => (
+                    <div key={territory.id} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {React.createElement(getTerritoryIcon(territory.status), {
+                          className: "w-4 h-4",
+                          style: { color: getTerritoryColor(territory.status, false) }
+                        })}
+                        <div>
+                          <div className="text-sm font-medium">{territory.owner_username || "Unknown Player"}</div>
+                          <div className="text-xs text-muted-foreground capitalize">{territory.status}</div>
+                        </div>
+                      </div>
+                      <Badge
+                        className="text-xs"
+                        style={{
+                          backgroundColor: `${getTerritoryColor(territory.status, false)}20`,
+                          color: getTerritoryColor(territory.status, false)
+                        }}
+                      >
+                        {territory.area_km2.toFixed(1)} km²
+                      </Badge>
+                    </div>
+                  ))}
+                {filteredTerritories.filter(t => t.owner_id !== userId).length === 0 && (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    No nearby enemy territories found.
+                  </div>
+                )}
               </CardContent>
             </Card>
+
+            {/* Contested Territories Alert */}
+            {territoryStats.contested_territories > 0 && (
+              <Card className="bg-destructive/10 border-destructive/30">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg text-destructive">
+                    <AlertTriangle className="w-5 h-5" />
+                    Territory Alert
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-destructive mb-3">
+                    You have {territoryStats.contested_territories} contested territories that need your attention!
+                  </p>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => setViewMode("contested")}
+                  >
+                    View Contested Zones
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </main>
@@ -520,7 +1140,17 @@ export default function TerritoryPage() {
       <TerritoryDetailsModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        territory={null}
+        territory={selectedTerritory}
+        onNavigateToRoutes={() => {
+          // Navigate to routes page - this would typically use React Router
+          window.location.href = '/routes';
+        }}
+        onNavigateToRoute={(routeId: string) => {
+          // Navigate to routes page with specific route selected
+          // Store the route ID in localStorage for the Routes page to pick up
+          localStorage.setItem('selectedRouteId', routeId);
+          window.location.href = '/routes';
+        }}
       />
     </div>
   );

@@ -1,152 +1,253 @@
-import { useEffect, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Trophy, Crown, Medal, TrendingUp, MapPin, Route, Target } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import { Trophy, Crown, Medal, MapPin, Route, Target, Users, Calendar, BarChart3, RefreshCw, Filter, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { GatewayAPI } from "@/lib/api";
+import { GatewayAPI } from "../lib/api";
+import { LeaderboardEntry } from "../components/features/user-profile/LeaderboardEntry";
+import { Input } from "../components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+
+type LeaderboardCategory = "territory" | "routes" | "winrate";
+type LeaderboardPeriod = "ALL_TIME" | "WEEKLY" | "MONTHLY";
+
+interface LeaderboardPlayer {
+  rank: number;
+  name: string;
+  userId?: string;
+  score: number;
+  totalArea: string;
+  zones: number;
+  routes: number;
+  winRate: string;
+  level: number;
+  distance: string;
+  trend: "up" | "down" | "stable";
+  rankChange: number;
+  badge: string | null;
+  isCurrentUser: boolean;
+}
+
+
 
 const Leaderboard = () => {
+  const [selectedCategory, setSelectedCategory] = useState<LeaderboardCategory>("territory");
+  const [selectedPeriod, setSelectedPeriod] = useState<LeaderboardPeriod>("ALL_TIME");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [pageSize, setPageSize] = useState(20);
+  const [currentPage, setCurrentPage] = useState(0);
+
+  const userId = useMemo(() => localStorage.getItem("user_id"), []);
+  const isAuthenticated = !!userId;
+
   useEffect(() => {
     document.title = "Leaderboard - Route Wars";
   }, []);
 
-  const { data: apiData } = useQuery({
-    queryKey: ["leaderboard", "territory"],
-    queryFn: () => GatewayAPI.leaderboard("territory", "ALL_TIME", 0, 10),
+  // Fetch leaderboard data based on selected category
+  const { data: apiData, isLoading, error, refetch } = useQuery({
+    queryKey: ["leaderboard", selectedCategory, selectedPeriod, currentPage, pageSize],
+    queryFn: () => {
+      const start = currentPage * pageSize;
+      switch (selectedCategory) {
+        case "routes":
+          return GatewayAPI.leaderboardRoutes(selectedPeriod, start, pageSize);
+        case "winrate":
+          return GatewayAPI.leaderboardWinRate(selectedPeriod, start, pageSize);
+        default:
+          return GatewayAPI.getLeaderboard("territory", selectedPeriod, start, pageSize);
+      }
+    },
   });
 
-  const topPlayers = useMemo(() => {
-    if (apiData && (apiData as any).ok && (apiData as any).data && (apiData as any).data.entries) {
-      const entries = (apiData as any).data.entries as Array<{ username: string; rank: number; user_stats?: any }>;
-      return entries.slice(0, 6).map((e, idx) => ({
-        rank: e.rank ?? idx + 1,
-        name: e.username ?? `Player ${idx + 1}`,
-        totalArea: `${Math.max(1, Math.round((((e.user_stats?.total_area_km2 as number | undefined) ?? 10) * 10)) / 10)} km²`,
-        zones: e.user_stats?.zones ?? 10,
-        routes: e.user_stats?.routes ?? 20,
-        winRate: `${e.user_stats?.win_rate ?? 75}%`,
-        trend: "up",
-        badge: idx === 0 ? "Crown" : idx === 1 ? "Trophy" : idx === 2 ? "Medal" : null,
-      }));
+  // Fetch leaderboard stats
+  const { data: statsData } = useQuery({
+    queryKey: ["leaderboard-stats", selectedCategory],
+    queryFn: () => GatewayAPI.leaderboardStats(selectedCategory),
+    enabled: !!selectedCategory,
+  });
+
+  // Get current user info for highlighting
+  const currentUsername = "testuser"; // This would come from user context in a real app
+
+  const allPlayers = useMemo(() => {
+    const entries = (apiData as any)?.data?.entries as Array<{
+      username?: string;
+      user_id?: string;
+      rank?: number;
+      score?: number;
+      user_stats?: {
+        total_area_km2?: number;
+        zones?: number;
+        routes?: number;
+        win_rate?: number;
+        level?: number;
+        total_distance?: number;
+      };
+    }> | undefined;
+
+    if (!entries || entries.length === 0) {
+      return [];
     }
 
-    return [
-      {
-        rank: 1,
-        name: "TerritoryKing",
-        totalArea: "127.3 km²",
-        zones: 89,
-        routes: 342,
-        winRate: "94%",
-        trend: "up",
-        badge: "Crown"
-      },
-      {
-        rank: 2,
-        name: "MapDominator",
-        totalArea: "98.7 km²",
-        zones: 67,
-        routes: 289,
-        winRate: "87%",
-        trend: "up",
-        badge: "Trophy"
-      },
-      {
-        rank: 3,
-        name: "RouteConqueror",
-        totalArea: "82.1 km²",
-        zones: 54,
-        routes: 267,
-        winRate: "91%",
-        trend: "down",
-        badge: "Medal"
-      },
-      {
-        rank: 4,
-        name: "GPSWarrior",
-        totalArea: "76.4 km²",
-        zones: 51,
-        routes: 234,
-        winRate: "83%",
-        trend: "up",
-        badge: null
-      },
-      {
-        rank: 5,
-        name: "ZoneHunter",
-        totalArea: "69.8 km²",
-        zones: 47,
-        routes: 198,
-        winRate: "89%",
-        trend: "stable",
-        badge: null
-      },
-      {
-        rank: 12,
-        name: "You",
-        totalArea: "31.2 km²",
-        zones: 23,
-        routes: 87,
-        winRate: "76%",
-        trend: "up",
-        badge: null
-      }
-    ];
-  }, [apiData]);
+    return entries.map((e, idx) => {
+      const globalRank = (currentPage * pageSize) + idx + 1;
+      return {
+        rank: e.rank ?? globalRank,
+        name: e.username ?? `Player ${globalRank}`,
+        userId: e.user_id,
+        score: e.score ?? 0,
+        totalArea: `${Math.max(0, Math.round((((e.user_stats?.total_area_km2 as number | undefined) ?? 0) * 10)) / 10)} km²`,
+        zones: e.user_stats?.zones ?? 0,
+        routes: e.user_stats?.routes ?? 0,
+        winRate: `${Math.round(e.user_stats?.win_rate ?? 0)}%`,
+        level: e.user_stats?.level ?? 1,
+        distance: `${((e.user_stats?.total_distance ?? 0) / 1000).toFixed(1)} km`,
+        trend: Math.random() > 0.5 ? "up" : Math.random() > 0.5 ? "down" : "stable" as "up" | "down" | "stable",
+        rankChange: Math.floor(Math.random() * 10) + 1,
+        badge: globalRank === 1 ? "Crown" : globalRank === 2 ? "Trophy" : globalRank === 3 ? "Medal" : null,
+        isCurrentUser: e.user_id === userId,
+      } as LeaderboardPlayer;
+    });
+  }, [apiData, selectedCategory, currentUsername, currentPage, pageSize, userId]);
 
-  const getRankIcon = (rank: number, badge: string | null) => {
-    if (badge === "Crown") return <Crown className="w-6 h-6 text-territory-contested" />;
-    if (badge === "Trophy") return <Trophy className="w-6 h-6 text-primary" />;
-    if (badge === "Medal") return <Medal className="w-6 h-6 text-territory-neutral" />;
-    return <span className="text-lg font-bold text-muted-foreground">#{rank}</span>;
-  };
-
-  const getTrendColor = (trend: string) => {
-    switch (trend) {
-      case "up": return "territory-claimed";
-      case "down": return "destructive";
-      case "stable": return "territory-neutral";
-      default: return "muted";
+  // Filter players based on search query
+  const filteredPlayers = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return allPlayers;
     }
-  };
+    return allPlayers.filter(player =>
+      player.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [allPlayers, searchQuery]);
 
-  const getTrendIcon = (trend: string) => {
-    const className = `w-4 h-4 text-${getTrendColor(trend)}`;
-    return <TrendingUp className={className} style={{ 
-      transform: trend === "down" ? "rotate(180deg)" : trend === "stable" ? "rotate(90deg)" : "none" 
-    }} />;
-  };
+  const topPlayers = filteredPlayers;
+
+
 
   const categories = [
     {
+      id: "territory" as LeaderboardCategory,
       title: "Most Territory",
       icon: MapPin,
       description: "Total area controlled",
-      color: "territory-claimed"
+      color: "territory-claimed",
+      statLabel: "Area"
     },
     {
+      id: "routes" as LeaderboardCategory,
       title: "Most Routes",
       icon: Route,
       description: "Routes completed",
-      color: "primary"
+      color: "primary",
+      statLabel: "Routes"
     },
     {
+      id: "winrate" as LeaderboardCategory,
       title: "Best Strategist",
       icon: Target,
       description: "Highest win rate",
-      color: "territory-contested"
+      color: "territory-contested",
+      statLabel: "Win Rate"
     }
   ];
+
+  const periods = [
+    { id: "ALL_TIME" as LeaderboardPeriod, label: "All Time", icon: BarChart3 },
+    { id: "MONTHLY" as LeaderboardPeriod, label: "Monthly", icon: Calendar },
+    { id: "WEEKLY" as LeaderboardPeriod, label: "Weekly", icon: Users },
+  ];
+
+  const getCurrentCategoryInfo = () => {
+    return categories.find(cat => cat.id === selectedCategory) || categories[0];
+  };
+
+
 
   return (
     <div className="min-h-screen bg-background">
       <main className="max-w-7xl mx-auto px-6 py-8">
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-4">Global Leaderboard</h1>
-          <p className="text-xl text-muted-foreground">
+          <p className="text-xl text-muted-foreground mb-6">
             The greatest territory conquerors and strategic masterminds.
           </p>
+
+          {/* Category Selection */}
+          <div className="flex flex-wrap gap-3 mb-4">
+            {categories.map((category) => {
+              const IconComponent = category.icon;
+              const isSelected = selectedCategory === category.id;
+              return (
+                <Button
+                  key={category.id}
+                  variant={isSelected ? "default" : "outline"}
+                  onClick={() => {
+                    setSelectedCategory(category.id);
+                    setCurrentPage(0); // Reset to first page when changing category
+                  }}
+                  className={`flex items-center gap-2 ${isSelected ? "bg-gradient-hero hover:shadow-glow" : ""}`}
+                >
+                  <IconComponent className="w-4 h-4" />
+                  {category.title}
+                </Button>
+              );
+            })}
+          </div>
+
+          {/* Period Selection and Filters */}
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+            <div className="flex flex-wrap gap-2">
+              {periods.map((period) => {
+                const IconComponent = period.icon;
+                const isSelected = selectedPeriod === period.id;
+                return (
+                  <Button
+                    key={period.id}
+                    variant={isSelected ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => {
+                      setSelectedPeriod(period.id);
+                      setCurrentPage(0); // Reset to first page when changing period
+                    }}
+                    className="flex items-center gap-1"
+                  >
+                    <IconComponent className="w-3 h-3" />
+                    {period.label}
+                  </Button>
+                );
+              })}
+            </div>
+
+            {/* Search and Filters */}
+            <div className="flex gap-2 items-center">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search players..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 w-48"
+                />
+              </div>
+              <Select value={pageSize.toString()} onValueChange={(value) => {
+                setPageSize(parseInt(value));
+                setCurrentPage(0);
+              }}>
+                <SelectTrigger className="w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8">
@@ -154,149 +255,233 @@ const Leaderboard = () => {
           <div className="lg:col-span-3">
             <Card className="bg-card/80 border-border/50">
               <CardHeader className="p-4 sm:p-6">
-                <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-                  <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
-                  Territory Leaderboard
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-lg sm:text-xl">
+                    {React.createElement(getCurrentCategoryInfo().icon, {
+                      className: `w-5 h-5 sm:w-6 sm:h-6 text-${getCurrentCategoryInfo().color}`
+                    })}
+                    {getCurrentCategoryInfo().title} Leaderboard
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => refetch()}
+                      disabled={isLoading}
+                      className="flex items-center gap-1"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isLoading ? "animate-spin" : ""}`} />
+                      Refresh
+                    </Button>
+                    {isLoading && (
+                      <div className="text-sm text-muted-foreground">Loading...</div>
+                    )}
+                  </div>
                 </CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {getCurrentCategoryInfo().description} • {periods.find(p => p.id === selectedPeriod)?.label}
+                </p>
               </CardHeader>
               <CardContent className="p-0">
+                {error && (
+                  <div className="p-6 text-center">
+                    <p className="text-muted-foreground">Failed to load leaderboard data</p>
+                    <Button variant="outline" onClick={() => refetch()} className="mt-2">
+                      Try Again
+                    </Button>
+                  </div>
+                )}
+
+                {!isLoading && !error && topPlayers.length === 0 && (
+                  <div className="p-6 text-center">
+                    <Trophy className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                    <h3 className="font-semibold mb-2">No Leaderboard Data</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      {isAuthenticated
+                        ? "Complete routes and claim territories to appear on the leaderboard!"
+                        : "The leaderboard will show top players once they start claiming territories."
+                      }
+                    </p>
+                    {!isAuthenticated && (
+                      <div className="flex gap-2 justify-center">
+                        <Button variant="outline" asChild>
+                          <Link to="/login">Sign In</Link>
+                        </Button>
+                        <Button className="bg-gradient-hero hover:shadow-glow" asChild>
+                          <Link to="/register">Get Started</Link>
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="space-y-1 sm:space-y-2">
-                  {topPlayers.map((player, index) => (
-                    <div
-                      key={player.rank}
-                      className={`flex items-center gap-2 sm:gap-4 p-3 sm:p-4 transition-all duration-300 hover:bg-primary/5 hover-scale ${
-                        player.name === "You" ? "bg-gradient-hero/10 border-l-4 border-primary" : ""
-                      } ${index < 3 ? "bg-background/50" : ""}`}
-                    >
-                      {/* Rank */}
-                      <div className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 shrink-0">
-                        {getRankIcon(player.rank, player.badge)}
-                      </div>
-
-                      {/* Avatar - Hidden on very small screens */}
-                      <Avatar className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 hidden xs:block">
-                        <AvatarFallback className="bg-primary/20 text-primary font-bold text-sm sm:text-base">
-                          {player.name.slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-
-                      {/* Player Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className={`font-bold text-sm sm:text-base truncate ${player.name === "You" ? "text-primary" : ""}`}>
-                            {player.name}
-                          </h3>
-                          {player.name === "You" && (
-                            <Badge className="bg-primary/20 text-primary text-xs shrink-0">You</Badge>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
-                          <span className="whitespace-nowrap">{player.zones} zones</span>
-                          <span className="whitespace-nowrap hidden sm:inline">{player.routes} routes</span>
-                          <span className="whitespace-nowrap">{player.winRate} win</span>
-                        </div>
-                      </div>
-
-                      {/* Territory */}
-                      <div className="text-right shrink-0">
-                        <p className="text-lg sm:text-2xl font-bold text-territory-claimed">{player.totalArea}</p>
-                        <div className="flex items-center gap-1 justify-end">
-                          {getTrendIcon(player.trend)}
-                          <span className={`text-xs text-${getTrendColor(player.trend)} hidden sm:inline`}>
-                            {player.trend}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+                  {topPlayers.map((player) => (
+                    <LeaderboardEntry
+                      key={`${player.rank}-${player.name}`}
+                      player={player}
+                      category={selectedCategory}
+                      showTrend={true}
+                      showStats={true}
+                    />
                   ))}
                 </div>
+
+                {/* Pagination Controls */}
+                {topPlayers.length > 0 && (
+                  <div className="flex items-center justify-between p-4 border-t">
+                    <div className="text-sm text-muted-foreground">
+                      Showing {currentPage * pageSize + 1}-{Math.min((currentPage + 1) * pageSize, (apiData as any)?.data?.total_entries || 0)} of {(apiData as any)?.data?.total_entries || 0} players
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+                        disabled={currentPage === 0}
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(currentPage + 1)}
+                        disabled={topPlayers.length < pageSize}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Categories */}
+            {/* Leaderboard Stats */}
             <Card className="bg-card/80 border-border/50">
               <CardHeader>
-                <CardTitle className="text-lg">Categories</CardTitle>
+                <CardTitle className="text-lg">Leaderboard Stats</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {categories.map((category, index) => {
-                  const IconComponent = category.icon;
-                  return (
-                    <div
-                      key={index}
-                      className="flex items-center gap-3 p-3 rounded-lg bg-background/50 hover:bg-primary/5 transition-colors cursor-pointer"
-                    >
-                      <div className={`flex items-center justify-center w-10 h-10 rounded-lg bg-${category.color}/20`}>
-                        <IconComponent className={`w-5 h-5 text-${category.color}`} />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-sm">{category.title}</h4>
-                        <p className="text-xs text-muted-foreground">{category.description}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-
-            {/* Your Stats */}
-            <Card className="bg-gradient-hero/10 border-primary/30">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Target className="w-5 h-5 text-primary" />
-                  Your Performance
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Current Rank</span>
-                  <span className="text-2xl font-bold text-primary">#12</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Territory</span>
-                  <span className="text-lg font-bold text-territory-claimed">31.2 km²</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">This Week</span>
-                  <Badge className="bg-territory-claimed/20 text-territory-claimed">
-                    +3 zones
-                  </Badge>
-                </div>
-                <div className="pt-2 text-center">
-                  <p className="text-xs text-muted-foreground mb-2">
-                    Next rank requires 45.8 km²
-                  </p>
-                  <div className="w-full bg-background/50 rounded-full h-2">
-                    <div 
-                      className="bg-gradient-hero h-2 rounded-full transition-all duration-500"
-                      style={{ width: "68%" }}
-                    />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center p-3 bg-background/50 rounded-lg">
+                    <p className="text-2xl font-bold text-primary">
+                      {(statsData as any)?.data?.total_players || 0}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Total Players</p>
+                  </div>
+                  <div className="text-center p-3 bg-background/50 rounded-lg">
+                    <p className="text-2xl font-bold text-territory-claimed">
+                      {topPlayers.length > 0 ? (
+                        selectedCategory === "territory" ? topPlayers[0].totalArea :
+                          selectedCategory === "routes" ? `${topPlayers[0].routes}` :
+                            topPlayers[0].winRate
+                      ) : "N/A"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Top Score</p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
 
-            {/* Weekly Challenge */}
-            <Card className="bg-card/80 border-border/50">
-              <CardHeader>
-                <CardTitle className="text-lg">Weekly Challenge</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center">
-                  <Trophy className="w-8 h-8 text-territory-contested mx-auto mb-2" />
-                  <h4 className="font-semibold mb-1">Territory Expansion</h4>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Gain 10+ km² of new territory
-                  </p>
-                  <Badge variant="outline" className="border-territory-contested/30">
-                    3.2/10 km² completed
-                  </Badge>
+                {/* Category Quick Switch */}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Quick Switch</p>
+                  {categories.map((category) => {
+                    const IconComponent = category.icon;
+                    const isSelected = selectedCategory === category.id;
+                    return (
+                      <div
+                        key={category.id}
+                        onClick={() => setSelectedCategory(category.id)}
+                        className={`flex items-center gap-3 p-2 rounded-lg transition-colors cursor-pointer ${isSelected
+                          ? `bg-${category.color}/20 border border-${category.color}/30`
+                          : "bg-background/50 hover:bg-primary/5"
+                          }`}
+                      >
+                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg bg-${category.color}/20`}>
+                          <IconComponent className={`w-4 h-4 text-${category.color}`} />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-xs">{category.title}</h4>
+                          <p className="text-xs text-muted-foreground">{category.statLabel}</p>
+                        </div>
+                        {isSelected && (
+                          <Badge className="bg-primary/20 text-primary text-xs">Active</Badge>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
+
+            {/* Your Rank */}
+            <Card className="bg-card/80 border-border/50">
+              <CardHeader>
+                <CardTitle className="text-lg">{isAuthenticated ? "Your Rank" : "Join the Competition"}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isAuthenticated ? (
+                  (() => {
+                    const currentUserRank = topPlayers.find(p => p.isCurrentUser);
+                    if (currentUserRank) {
+                      return (
+                        <div className="text-center">
+                          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-gradient-hero/20 mx-auto mb-3">
+                            <span className="text-2xl font-bold text-primary">#{currentUserRank.rank}</span>
+                          </div>
+                          <h4 className="font-semibold mb-1">{currentUserRank.name}</h4>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            {selectedCategory === "territory" ? currentUserRank.totalArea :
+                              selectedCategory === "routes" ? `${currentUserRank.routes} routes` :
+                                currentUserRank.winRate}
+                          </p>
+                          <div className="grid grid-cols-3 gap-2 text-xs">
+                            <div className="text-center">
+                              <p className="font-semibold">{currentUserRank.zones}</p>
+                              <p className="text-muted-foreground">Zones</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="font-semibold">{currentUserRank.routes}</p>
+                              <p className="text-muted-foreground">Routes</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="font-semibold">L{currentUserRank.level}</p>
+                              <p className="text-muted-foreground">Level</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="text-center text-muted-foreground">
+                        <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">Complete your first route to appear on the leaderboard!</p>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div className="text-center">
+                    <Trophy className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                    <h4 className="font-semibold mb-2">Start Your Journey</h4>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Sign up to track your routes, claim territories, and compete on the leaderboard!
+                    </p>
+                    <div className="space-y-2">
+                      <Button className="w-full bg-gradient-hero hover:shadow-glow" asChild>
+                        <Link to="/register">Get Started</Link>
+                      </Button>
+                      <Button variant="outline" className="w-full" asChild>
+                        <Link to="/login">Sign In</Link>
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+
           </div>
         </div>
       </main>

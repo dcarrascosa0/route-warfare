@@ -1,0 +1,187 @@
+/* Territory update animations */
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes territory-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+}
+
+@keyframes territory-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 0px rgba(16, 185, 129, 0));
+  }
+  50% {
+    filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.8));
+  }
+}
+
+@keyframes territory-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-2px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(2px);
+  }
+}
+
+@keyframes territory-contested-flash {
+  0%, 100% {
+    stroke-dasharray: 5, 5;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 5, 5;
+    stroke-dashoffset: 10;
+  }
+}
+
+@keyframes notification-bounce {
+  0%, 20%, 53%, 80%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  40%, 43% {
+    transform: translate3d(0, -8px, 0);
+  }
+  70% {
+    transform: translate3d(0, -4px, 0);
+  }
+  90% {
+    transform: translate3d(0, -2px, 0);
+  }
+}
+
+/* Utility classes */
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
+}
+
+.animate-territory-pulse {
+  animation: territory-pulse 2s ease-in-out infinite;
+}
+
+.animate-territory-glow {
+  animation: territory-glow 2s ease-in-out infinite;
+}
+
+.animate-territory-shake {
+  animation: territory-shake 0.5s ease-in-out 3;
+}
+
+.animate-territory-contested {
+  animation: territory-contested-flash 1s linear infinite;
+}
+
+.animate-notification-bounce {
+  animation: notification-bounce 1s ease-in-out;
+}
+
+/* Territory status colors for CSS variables */
+:root {
+  --territory-claimed: #10b981;
+  --territory-contested: #f59e0b;
+  --territory-enemy: #ef4444;
+  --territory-neutral: #6b7280;
+}
+
+/* Real-time update indicators */
+.territory-update-glow {
+  box-shadow: 0 0 20px rgba(251, 146, 60, 0.5);
+  border: 2px solid rgba(251, 146, 60, 0.8);
+}
+
+.territory-update-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* WebSocket connection status */
+.websocket-connected {
+  background: linear-gradient(45deg, #10b981, #059669);
+}
+
+.websocket-disconnected {
+  background: linear-gradient(45deg, #ef4444, #dc2626);
+}
+
+.websocket-reconnecting {
+  background: linear-gradient(45deg, #f59e0b, #d97706);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+/* Territory polygon hover effects */
+.territory-polygon:hover {
+  filter: brightness(1.1);
+  transition: filter 0.2s ease-in-out;
+}
+
+.territory-polygon.is-updating {
+  filter: brightness(1.2) saturate(1.3);
+  transition: filter 0.3s ease-in-out;
+}
+
+/* Notification toast animations */
+.notification-toast-enter {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+.notification-toast-enter-active {
+  transform: translateX(0);
+  opacity: 1;
+  transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+.notification-toast-exit {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.notification-toast-exit-active {
+  transform: translateX(100%);
+  opacity: 0;
+  transition: transform 0.3s ease-in, opacity 0.3s ease-in;
+}
+
+/* Loading states for real-time updates */
+.territory-loading {
+  opacity: 0.6;
+  filter: grayscale(0.3);
+}
+
+.territory-loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}

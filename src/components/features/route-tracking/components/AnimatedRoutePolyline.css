@@ -1,0 +1,159 @@
+/* Animated Route Polyline Styles */
+
+.animated-route-segment {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: stroke-width, opacity;
+}
+
+/* Closed loop special styling */
+.animated-route-segment.closed-loop {
+  filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.4));
+}
+
+/* Pulsing animation for closed loops indicating territory eligibility */
+.animated-route-segment.closed-loop.pulsing {
+  animation: closedLoopPulse 3s ease-in-out infinite;
+}
+
+@keyframes closedLoopPulse {
+  0%, 100% {
+    stroke-width: 4;
+    opacity: 0.8;
+    filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.4));
+  }
+  50% {
+    stroke-width: 6;
+    opacity: 1;
+    filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.6));
+  }
+}
+
+/* Smooth path growth animation */
+.animated-route-segment {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: drawPath 0.5s ease-out forwards;
+}
+
+@keyframes drawPath {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Performance optimization for long routes */
+.animated-route-segment.optimized {
+  shape-rendering: optimizeSpeed;
+}
+
+/* Hover effects for interactive segments */
+.animated-route-segment:hover {
+  stroke-width: 6;
+  opacity: 1;
+  filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.3));
+  cursor: pointer;
+}
+
+/* Status-specific styling enhancements */
+.animated-route-segment.status-active {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.animated-route-segment.status-completed {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.7;
+}
+
+.animated-route-segment.status-cancelled {
+  stroke-dasharray: 5, 10;
+  opacity: 0.5;
+}
+
+/* Gradient transition effects */
+.animated-route-segment.gradient-start {
+  filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.5));
+}
+
+.animated-route-segment.gradient-end {
+  filter: drop-shadow(0 0 2px rgba(16, 185, 129, 0.5));
+}
+
+/* Accessibility and reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .animated-route-segment {
+    animation: none;
+    transition: none;
+  }
+  
+  .animated-route-segment.closed-loop.pulsing {
+    animation: none;
+  }
+  
+  @keyframes closedLoopPulse {
+    0%, 100% {
+      stroke-width: 5;
+      opacity: 0.9;
+    }
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .animated-route-segment {
+    stroke-width: 5;
+    opacity: 1;
+  }
+  
+  .animated-route-segment.closed-loop {
+    stroke-width: 6;
+    filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8));
+  }
+}
+
+/* Focus styles for accessibility */
+.animated-route-segment:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .animated-route-segment {
+    stroke-width: 5; /* Slightly thicker for better touch interaction */
+  }
+  
+  .animated-route-segment:hover {
+    stroke-width: 7;
+  }
+  
+  .animated-route-segment.closed-loop.pulsing {
+    animation-duration: 2s; /* Faster pulse on mobile */
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .animated-route-segment {
+    filter: brightness(1.1);
+  }
+  
+  .animated-route-segment.closed-loop {
+    filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.6)) brightness(1.1);
+  }
+}
+
+/* Print styles */
+@media print {
+  .animated-route-segment {
+    animation: none;
+    transition: none;
+    stroke-width: 2;
+    opacity: 1;
+  }
+  
+  .animated-route-segment.closed-loop.pulsing {
+    animation: none;
+  }
+}

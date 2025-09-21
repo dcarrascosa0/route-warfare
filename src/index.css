@@ -151,9 +151,67 @@ All colors MUST be HSL.
     animation: slide-up 0.3s ease-out;
   }
   
+  .animate-slide-in-right {
+    animation: slide-in-right 0.3s ease-out;
+  }
+  
+  .animate-scale-in {
+    animation: scale-in 0.2s ease-out;
+  }
+  
+  .animate-territory-pulse {
+    animation: territory-pulse 2s ease-in-out infinite;
+  }
+  
+  .animate-territory-glow {
+    animation: territory-glow 1.5s ease-in-out infinite alternate;
+  }
+  
   @keyframes slide-up {
     from { transform: translateY(100%); }
     to { transform: translateY(0); }
+  }
+  
+  @keyframes slide-in-right {
+    from { 
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to { 
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+  
+  @keyframes scale-in {
+    from { 
+      transform: scale(0.95);
+      opacity: 0;
+    }
+    to { 
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  
+  @keyframes territory-pulse {
+    0%, 100% { 
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% { 
+      transform: scale(1.05);
+      opacity: 0.8;
+    }
+  }
+  
+  @keyframes territory-glow {
+    from { 
+      box-shadow: 0 0 5px hsl(var(--primary) / 0.3);
+    }
+    to { 
+      box-shadow: 0 0 20px hsl(var(--primary) / 0.6);
+    }
   }
 
   /* Custom utilities */
