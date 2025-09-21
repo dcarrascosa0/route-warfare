@@ -68,7 +68,7 @@ export const useTerritoryUpdates = (
           hasSignificantChange = true;
           if (territory.status === 'contested') {
             updateType = 'territory_contested';
-          } else if (territory.status === 'claimed' && previous.status === 'contested') {
+          } else if (territory.status === 'active' && previous.status === 'contested') {
             updateType = 'territory_claimed'; // Conflict resolved
           }
         }

@@ -14,7 +14,6 @@ import RequireAuth from "@/components/features/auth/RequireAuth";
 // Lazy load page components for better performance
 const Index = lazy(() => import("./pages/Index"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
-const Territory = lazy(() => import("./pages/Territory"));
 const Routes = lazy(() => import("./pages/Routes"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const Profile = lazy(() => import("./pages/Profile"));
@@ -53,7 +52,7 @@ const App = () => {
             <Route path="/territory" element={
               <RequireAuth>
                 <Suspense fallback={<LoadingSpinner />}>
-                  <Territory />
+                  <Dashboard />
                 </Suspense>
               </RequireAuth>
             } />

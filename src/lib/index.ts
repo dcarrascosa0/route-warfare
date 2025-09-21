@@ -33,6 +33,3 @@ export * from './workers';
 // Utilities and constants
 export * from './utils';
 export * from './constants';
-
-// Backward compatibility exports
-export * from './utils.ts'; // Re-export the main utils file for compatibility

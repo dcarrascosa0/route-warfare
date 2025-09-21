@@ -1,5 +1,5 @@
 import { useContext } from 'react';
-import { NotificationContext, NotificationContextType } from '@/contexts/NotificationContext';
+import { NotificationContextType } from '@/contexts/NotificationContext';
 
 /**
  * Hook for subscribing to real-time game events via WebSocket notifications.
@@ -13,11 +13,9 @@ import { NotificationContext, NotificationContextType } from '@/contexts/Notific
  * @returns NotificationContextType with all notification functionality
  */
 export const useNotifications = (): NotificationContextType => {
-  const context = useContext(NotificationContext);
-  if (context === undefined) {
-    throw new Error('useNotifications must be used within a NotificationProvider');
-  }
-  return context;
+  // Import and re-export the useNotifications from context
+  const { useNotifications } = require('@/contexts/NotificationContext');
+  return useNotifications();
 };
 
 /**

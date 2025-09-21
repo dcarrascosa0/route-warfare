@@ -1,15 +1,18 @@
 // Organized hook exports
 export * from './api';
 export * from './ui';
-export * from './business';
 
 // Direct exports for commonly used hooks
-export { default as useAuth } from './useAuth';
-export { default as useResponsive } from './useResponsive';
-export { default as useLoadingState } from './useLoadingState';
-export { default as useErrorHandler } from './useErrorHandler';
+export * from './useAuth';
+export * from './useResponsive';
+export * from './useLoadingState';
+export * from './useErrorHandler';
 
-// New business hooks
-export { default as useMapState } from './business/useMapState';
-export { default as useRouteStatistics } from './business/useRouteStatistics';
-export { default as useTerritoryClaiming } from './business/useTerritoryClaiming';
+// Business hooks (separate to avoid conflicts)
+export * from './business/useMapState';
+export * from './business/useRouteStatistics';
+export * from './business/useTerritoryClaiming';
+export * from './useNotifications';
+export * from './useNetworkStatus';
+export * from './useRouteTracker';
+export * from './useTerritoryUpdates';

@@ -1,8 +1,34 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { GatewayAPI } from '@/lib/api';
-import { queryKeys, invalidateQueries } from '@/lib/query-client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+
+// Create query keys utility inline to avoid import issues
+const queryKeys = {
+  activeRoute: (userId: string) => ['routes', 'active', userId],
+  routesForUser: (userId: string) => ['routes', 'user', userId],
+  route: (routeId: string, userId: string) => ['routes', routeId, userId],
+  userTerritories: (userId: string) => ['territories', 'user', userId],
+  territoriesMap: () => ['territories', 'map'],
+};
+
+// Create invalidation utility inline
+const invalidateQueries = {
+  routes: (queryClient: any, userId: string) => {
+    queryClient.invalidateQueries({ queryKey: ['routes'] });
+    queryClient.invalidateQueries({ queryKey: ['routes', 'user', userId] });
+  },
+  userProfile: (queryClient: any, userId: string) => {
+    queryClient.invalidateQueries({ queryKey: ['user', userId] });
+  },
+  territories: (queryClient: any, userId: string) => {
+    queryClient.invalidateQueries({ queryKey: ['territories'] });
+    queryClient.invalidateQueries({ queryKey: ['territories', 'user', userId] });
+  },
+  leaderboard: (queryClient: any) => {
+    queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+  },
+};
 
 // Optimistic route tracking mutations
 export const useOptimisticStartRoute = () => {

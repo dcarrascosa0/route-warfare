@@ -1,5 +1,6 @@
 import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { GatewayAPI } from '@/lib/api';
+import type { UserStatistics as APIUserStatistics, UserStatisticsComparison, UserStatisticsHistory, UserAchievement } from '@/lib/api/types/users';
 
 export interface UserStatistics {
   total_territory_area: number;
@@ -49,8 +50,8 @@ export interface Achievement {
   reward_title?: string;
 }
 
-// Hook for fetching user statistics
-export function useUserStatistics(userId: string): UseQueryResult<UserStatistics> {
+// Hook for fetching user statistics  
+export function useUserStatistics(userId: string): UseQueryResult<APIUserStatistics> {
   return useQuery({
     queryKey: ['user', 'statistics', userId],
     queryFn: async () => {
@@ -58,16 +59,16 @@ export function useUserStatistics(userId: string): UseQueryResult<UserStatistics
       if (!result.ok) {
         throw new Error('Failed to fetch user statistics');
       }
-      return result.data as UserStatistics;
+      return result.data as APIUserStatistics;
     },
     enabled: !!userId,
     staleTime: 5 * 60 * 1000, // 5 minutes
-    cacheTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
   });
 }
 
 // Hook for fetching comparison data
-export function useUserStatisticsComparison(userId: string): UseQueryResult<ComparisonData> {
+export function useUserStatisticsComparison(userId: string): UseQueryResult<UserStatisticsComparison> {
   return useQuery({
     queryKey: ['user', 'statistics', 'comparison', userId],
     queryFn: async () => {
@@ -75,16 +76,16 @@ export function useUserStatisticsComparison(userId: string): UseQueryResult<Comp
       if (!result.ok) {
         throw new Error('Failed to fetch comparison data');
       }
-      return result.data as ComparisonData;
+      return result.data as UserStatisticsComparison;
     },
     enabled: !!userId,
     staleTime: 15 * 60 * 1000, // 15 minutes
-    cacheTime: 30 * 60 * 1000, // 30 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
   });
 }
 
 // Hook for fetching historical data
-export function useUserStatisticsHistory(userId: string, period: string = '30d'): UseQueryResult<HistoricalData[]> {
+export function useUserStatisticsHistory(userId: string, period: string = '30d'): UseQueryResult<UserStatisticsHistory> {
   return useQuery({
     queryKey: ['user', 'statistics', 'history', userId, period],
     queryFn: async () => {
@@ -92,16 +93,16 @@ export function useUserStatisticsHistory(userId: string, period: string = '30d')
       if (!result.ok) {
         throw new Error('Failed to fetch historical data');
       }
-      return result.data as HistoricalData[];
+      return result.data as UserStatisticsHistory;
     },
     enabled: !!userId,
     staleTime: 10 * 60 * 1000, // 10 minutes
-    cacheTime: 20 * 60 * 1000, // 20 minutes
+    gcTime: 20 * 60 * 1000, // 20 minutes
   });
 }
 
 // Hook for fetching user achievements
-export function useUserAchievements(userId: string): UseQueryResult<Achievement[]> {
+export function useUserAchievements(userId: string): UseQueryResult<UserAchievement[]> {
   return useQuery({
     queryKey: ['user', 'achievements', userId],
     queryFn: async () => {
@@ -109,11 +110,11 @@ export function useUserAchievements(userId: string): UseQueryResult<Achievement[
       if (!result.ok) {
         throw new Error('Failed to fetch user achievements');
       }
-      return result.data as Achievement[];
+      return result.data as UserAchievement[];
     },
     enabled: !!userId,
     staleTime: 5 * 60 * 1000, // 5 minutes
-    cacheTime: 15 * 60 * 1000, // 15 minutes
+    gcTime: 15 * 60 * 1000, // 15 minutes
   });
 }
 
@@ -130,7 +131,7 @@ export function useAchievementProgress(userId: string, achievementId: string): U
     },
     enabled: !!userId && !!achievementId,
     staleTime: 2 * 60 * 1000, // 2 minutes
-    cacheTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 5 * 60 * 1000, // 5 minutes
   });
 }
 

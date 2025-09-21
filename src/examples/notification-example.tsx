@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { NotificationProvider, useNotifications } from '@/contexts/NotificationContext';
-import { NotificationToast } from '@/components/notification-toast';
-import { NotificationCenter } from '@/components/notification-center';
-import { NotificationPreferences } from '@/components/notification-preferences';
+import { NotificationToast, NotificationCenter, NotificationPreferences } from '@/components/features/notifications';
 import { Bell, Settings } from 'lucide-react';
 
 /**
@@ -125,7 +123,7 @@ const NotificationDemo: React.FC = () => {
                         {notifications.slice(0, 5).map((notification) => (
                             <div
                                 key={notification.id}
-                                className={`p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors ${notification.status === 'read' ? 'opacity-75' : 'border-blue-500'
+                                className={`p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors ${notification.status === 'READ' ? 'opacity-75' : 'border-blue-500'
                                     }`}
                                 onClick={() => markAsRead(notification.id)}
                             >
@@ -137,7 +135,7 @@ const NotificationDemo: React.FC = () => {
                                             {new Date(notification.created_at).toLocaleString()}
                                         </span>
                                     </div>
-                                    {notification.status !== 'read' && (
+                                    {notification.status !== 'READ' && (
                                         <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-2" />
                                     )}
                                 </div>

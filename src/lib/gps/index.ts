@@ -3,4 +3,12 @@
  */
 
 export * from './gps-simulator.ts';
-export * from './coordinate-validation.ts';
+export { 
+  validateCoordinate,
+  validateCoordinateSequence,
+  filterValidCoordinates,
+  isClosedLoop,
+  calculateTotalDistance,
+  calculateAverageSpeed,
+  calculateDistance as calculateGPSDistance
+} from './coordinate-validation.ts';

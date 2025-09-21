@@ -68,7 +68,7 @@ export default defineConfig(({ mode }) => ({
           utils: ['date-fns', 'clsx', 'tailwind-merge', 'class-variance-authority']
         },
         chunkFileNames: (chunkInfo) => {
-          const facadeModuleId = chunkInfo.facadeModuleId ? chunkInfo.facadeModuleId.split('/').pop().replace(/\.[^/.]+$/, "") : "chunk";
+          const facadeModuleId = chunkInfo.facadeModuleId ? chunkInfo.facadeModuleId.split('/').pop()?.replace(/\.[^/.]+$/, "") : "chunk";
           return `assets/${facadeModuleId}-[hash].js`;
         },
         assetFileNames: 'assets/[name]-[hash].[ext]',
