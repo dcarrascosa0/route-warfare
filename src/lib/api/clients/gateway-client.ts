@@ -87,29 +87,25 @@ class GatewayApiClient {
         return this.users.getAchievementProgress(userId, achievementId);
     }
 
+    async updateUserProfile(userId: string, profile: { username: string; email: string }) {
+        return this.users.updateUserProfile(userId, profile);
+    }
+
     // Route convenience methods
-    async routesForUser(userId: string, limit = 20) {
-        return this.routes.getRoutesForUser(userId, limit);
+    async routesForUser(userId: string, limit = 20, status = "all") {
+        return this.routes.getRoutesForUser(userId, limit, status);
     }
 
     async startRoute(userId: string, body: { name?: string; description?: string; start_coordinate?: any }) {
         return this.routes.startRoute(userId, body);
     }
 
-    async addCoordinates(routeId: string, userId: string, coordinates: Array<{
-        latitude: number;
-        longitude: number;
-        altitude?: number | null;
-        accuracy?: number | null;
-        speed?: number | null;
-        bearing?: number | null;
-        timestamp: string;
-    }>) {
-        return this.routes.addCoordinates(routeId, userId, coordinates);
+    async addCoordinates(routeId: string, userId: string, coordinates: any[]) {
+        return this.routes.addCoordinates(routeId, userId, { coordinates });
     }
 
-    async completeRoute(routeId: string, userId: string, completion: { end_coordinate?: any; force_completion?: boolean }) {
-        return this.routes.completeRoute(routeId, userId, completion);
+    async completeRoute(routeId: string, userId:string, payload: any) {
+        return this.routes.completeRoute(routeId, userId, payload);
     }
 
     async getActiveRoute(userId: string) {
@@ -139,6 +135,10 @@ class GatewayApiClient {
     async addCoordinateToRoute(routeId: string, userId: string, coordinate: { latitude: number; longitude: number; accuracy?: number; timestamp: string }) {
         return this.routes.addCoordinateToRoute(routeId, userId, coordinate);
     }
+
+  async cleanupStuckRoutes(userId: string, maxAgeMinutes: number = 30) {
+    return this.routes.cleanupStuckRoutes(userId, maxAgeMinutes);
+  }
 
     // Territory convenience methods
     async claimTerritoryFromRoute(ownerId: string, body: { route_id: string; boundary_coordinates: Array<{ longitude: number; latitude: number }>; name?: string; description?: string }) {
@@ -173,6 +173,62 @@ class GatewayApiClient {
 
     async getNearbyTerritories(latitude: number, longitude: number, radius: number = 5000) {
         return this.territories.getNearbyTerritories(latitude, longitude, radius);
+    }
+
+    async getRealTimeTerritoryPreview(coordinates: Array<{ longitude: number; latitude: number }>) {
+        return this.territories.getRealTimeTerritoryPreview(coordinates);
+    }
+
+    // Territory Statistics convenience methods
+    async getUserTerritoryStatistics(userId: string) {
+        return this.territories.getUserTerritoryStatistics(userId);
+    }
+
+    async getGlobalTerritoryStatistics() {
+        return this.territories.getGlobalTerritoryStatistics();
+    }
+
+    async getTerritoryStatistics(userId: string) {
+        return this.territories.getTerritoryStatistics(userId);
+    }
+
+    // Territory Leaderboard convenience methods
+    async getTerritoryLeaderboard(metric: string = "total_area", limit: number = 50, offset: number = 0) {
+        return this.territories.getTerritoryLeaderboard(metric, limit, offset);
+    }
+
+    async getLeaderboardByArea(limit: number = 50, offset: number = 0) {
+        return this.territories.getLeaderboardByArea(limit, offset);
+    }
+
+    async getLeaderboardByCount(limit: number = 50, offset: number = 0) {
+        return this.territories.getLeaderboardByCount(limit, offset);
+    }
+
+    async getLeaderboardByActivity(limit: number = 50, offset: number = 0) {
+        return this.territories.getLeaderboardByActivity(limit, offset);
+    }
+
+    async getLeaderboardByAverageArea(limit: number = 50, offset: number = 0) {
+        return this.territories.getLeaderboardByAverageArea(limit, offset);
+    }
+
+    // Territory Preview convenience methods
+    async calculateTerritoryPreview(coordinates: Array<{ longitude: number; latitude: number }>) {
+        return this.territories.calculateTerritoryPreview(coordinates);
+    }
+
+    async getTerritoryPreviewWithValidation(coordinates: Array<{ longitude: number; latitude: number }>) {
+        return this.territories.getTerritoryPreviewWithValidation(coordinates);
+    }
+
+    // Territory Validation convenience methods
+    async validateTerritoryClaimFromRoute(routeId: string, boundaryCoordinates: Array<{ longitude: number; latitude: number }>) {
+        return this.territories.validateTerritoryClaimFromRoute(routeId, boundaryCoordinates);
+    }
+
+    async validateRouteTerritoryEligibility(routeId: string) {
+        return this.territories.validateRouteTerritoryEligibility(routeId);
     }
 
     // Leaderboard convenience methods

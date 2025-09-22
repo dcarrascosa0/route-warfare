@@ -8,6 +8,7 @@ import { Badge } from "../../ui/badge";
 import { Switch } from "../../ui/switch";
 import { Alert, AlertDescription } from "../../ui/alert";
 import { Navigation, Play, Square, Pause, MapPin, Info, AlertTriangle } from "lucide-react";
+import OfflineModeSwitcher from './OfflineModeSwitcher';
 
 interface SimulatedPosition {
   coords: {
@@ -65,9 +66,18 @@ export default function GPSSimulator({ onSimulationToggle, className = "" }: GPS
   const routePointsRef = useRef<Array<{ lat: number; lng: number }>>([]);
   const LS_KEY = 'gpssim:start';
 
-  // Initialize start position from localStorage or navigator geolocation
+  // Initialize start position from last known GPS, simulator cache, or navigator geolocation
   useEffect(() => {
     try {
+      const last = localStorage.getItem('gps:last');
+      if (last) {
+        const { lat, lng } = JSON.parse(last);
+        if (typeof lat === 'number' && typeof lng === 'number') {
+          setStartLat(lat);
+          setStartLng(lng);
+          return;
+        }
+      }
       const saved = localStorage.getItem(LS_KEY);
       if (saved) {
         const { lat, lng } = JSON.parse(saved);
@@ -203,30 +213,28 @@ export default function GPSSimulator({ onSimulationToggle, className = "" }: GPS
     return points;
   };
 
-  const startSimulation = () => {
-    if (isSimulating) return;
-    
-    // Generate route points
-    routePointsRef.current = generateRoutePoints(selectedPattern, startLat, startLng);
+  const beginSimulationAt = (centerLat: number, centerLng: number) => {
+    // Generate route points around the provided center
+    routePointsRef.current = generateRoutePoints(selectedPattern, centerLat, centerLng);
     positionIndexRef.current = 0;
-    
+
     setIsSimulating(true);
     onSimulationToggle?.(true);
     try {
       window.dispatchEvent(new CustomEvent('gps:sim:toggle', { detail: { enabled: true } }));
     } catch {}
-    
+
     intervalRef.current = setInterval(() => {
       const points = routePointsRef.current;
       if (points.length === 0) return;
-      
+
       const currentIndex = positionIndexRef.current;
       const point = points[currentIndex];
-      
+
       // Add some random noise to simulate GPS inaccuracy
       const latNoise = (Math.random() - 0.5) * (accuracy / 111000); // Convert meters to degrees
       const lngNoise = (Math.random() - 0.5) * (accuracy / 111000);
-      
+
       const simulatedPosition: SimulatedPosition = {
         coords: {
           latitude: point.lat + latNoise,
@@ -239,15 +247,52 @@ export default function GPSSimulator({ onSimulationToggle, className = "" }: GPS
         },
         timestamp: Date.now()
       };
-      
+
       setCurrentPosition(simulatedPosition);
       try {
         window.dispatchEvent(new CustomEvent('gps:position', { detail: simulatedPosition }));
       } catch {}
-      
+
       // Move to next point
       positionIndexRef.current = (currentIndex + 1) % points.length;
     }, updateInterval);
+  };
+
+  const startSimulation = () => {
+    if (isSimulating) return;
+
+    // Try to anchor to the user's current geolocation when available; otherwise use last known/saved start
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          setStartLat(lat);
+          setStartLng(lng);
+          try { localStorage.setItem(LS_KEY, JSON.stringify({ lat, lng })); } catch {}
+          beginSimulationAt(lat, lng);
+        },
+        () => {
+          // Fallback to last known stored position or current state
+          try {
+            const last = localStorage.getItem('gps:last');
+            if (last) {
+              const { lat, lng } = JSON.parse(last);
+              if (typeof lat === 'number' && typeof lng === 'number') {
+                setStartLat(lat);
+                setStartLng(lng);
+                beginSimulationAt(lat, lng);
+                return;
+              }
+            }
+          } catch {}
+          beginSimulationAt(startLat, startLng);
+        },
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 5000 }
+      );
+    } else {
+      beginSimulationAt(startLat, startLng);
+    }
   };
 
   const stopSimulation = () => {
@@ -433,6 +478,7 @@ export default function GPSSimulator({ onSimulationToggle, className = "" }: GPS
           </CardContent>
         </Card>
       )}
+      <OfflineModeSwitcher />
     </div>
   );
 }

@@ -30,7 +30,7 @@ export const useOfflineSync = () => {
 
   const addOfflineOperation = (operation: {
     type: 'ADD_COORDINATES' | 'COMPLETE_ROUTE' | 'START_ROUTE' | 'CLAIM_TERRITORY';
-    data: any;
+    data: { [key: string]: string | number | boolean };
     userId: string;
   }) => {
     const manager = getOfflineSyncManager();

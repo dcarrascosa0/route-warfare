@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Install deps first (use lockfile if present)
 COPY package*.json ./
-RUN npm ci --no-audit --no-fund || npm i --no-audit --no-fund
+RUN npm ci --no-audit --no-fund --legacy-peer-deps || npm i --no-audit --no-fund --legacy-peer-deps
 
 # Copy rest of the app (bind mount will override in dev)
 COPY . .

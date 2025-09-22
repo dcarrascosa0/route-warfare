@@ -21,7 +21,7 @@ const NotificationDemo: React.FC = () => {
 
     const [showCenter, setShowCenter] = useState(false);
     const [showPreferences, setShowPreferences] = useState(false);
-    const [toastNotifications, setToastNotifications] = useState<any[]>([]);
+    const [toastNotifications, setToastNotifications] = useState<Notification[]>([]);
 
     // Handle new notifications for toast display
     React.useEffect(() => {
@@ -35,11 +35,11 @@ const NotificationDemo: React.FC = () => {
         setToastNotifications(prev => prev.filter(n => n.id !== id));
     };
 
-    const handleSavePreferences = async (preferences: any) => {
-        // In a real app, this would save to the backend
-        console.log('Saving preferences:', preferences);
+    const handleSavePreferences = async (preferences: { [key: string]: string | number | boolean | object }) => {
+        console.log("Saving preferences:", preferences);
+        await new Promise(resolve => setTimeout(resolve, 500));
         // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // await new Promise(resolve => setTimeout(resolve, 1000));
     };
 
     return (

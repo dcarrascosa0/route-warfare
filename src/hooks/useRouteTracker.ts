@@ -16,21 +16,24 @@ type StartOptions = {
   description?: string;
 };
 
-type UseRouteTrackerResult = {
+interface UseRouteTrackerResult {
   isTracking: boolean;
   startedAt: number | null;
   elapsedMs: number;
   routeId: string | null;
+  currentLocation: GeolocationPosition | null;
+  trackedCoordinates: CoordinateInput[];
   start: (opts?: StartOptions) => Promise<boolean>;
-  stop: (completeAndClaim?: boolean) => Promise<boolean>;
+  stop: (completeAndClaim?: boolean, name?: string) => Promise<boolean>;
+  cancel: () => Promise<boolean>;
   cleanup: () => void;
   error: string | null;
-};
+  clearError: () => void;
+  flush: () => Promise<void>;
+}
 
 const BATCH_SIZE = 10;
 const BATCH_INTERVAL_MS = 5000;
-const MIN_COORDINATE_DISTANCE = 2.0; // Minimum 2m between coordinates
-const MAX_COORDINATE_AGE_MS = 10000; // 10 second max age
 
 // Helper function to validate coordinates
 const isValidCoordinate = (coord: CoordinateInput): boolean => {
@@ -69,17 +72,30 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
   const [elapsedMs, setElapsedMs] = useState(0);
   const [isTracking, setIsTracking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<GeolocationPosition | null>(null);
+  const [trackedCoordinates, setTrackedCoordinates] = useState<CoordinateInput[]>([]);
 
   const watchIdRef = useRef<number | null>(null);
   const batchRef = useRef<CoordinateInput[]>([]);
   const lastFlushRef = useRef<number>(0);
   const tickTimerRef = useRef<number | null>(null);
   const simHandlerRef = useRef<((e: Event) => void) | null>(null);
+  const routeIdRef = useRef<string | null>(null);
+  const userIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    routeIdRef.current = routeId;
+  }, [routeId]);
+  useEffect(() => {
+    userIdRef.current = userId ?? null;
+  }, [userId]);
 
   const flushBatch = useCallback(async () => {
-    console.log('flushBatch called - userId:', userId, 'routeId:', routeId, 'batchSize:', batchRef.current.length);
+    const currentUserId = userIdRef.current;
+    const currentRouteId = routeIdRef.current;
+    console.log('flushBatch called - userId:', currentUserId, 'routeId:', currentRouteId, 'batchSize:', batchRef.current.length);
     
-    if (!userId || !routeId) {
+    if (!currentUserId || !currentRouteId) {
       console.log('Cannot flush - missing userId or routeId');
       return;
     }
@@ -88,41 +104,56 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
       return;
     }
     
-    // Filter old coordinates
-    const now = Date.now();
-    const validCoords = batchRef.current.filter(coord => {
-      const age = now - new Date(coord.timestamp).getTime();
-      return age <= MAX_COORDINATE_AGE_MS;
-    });
-    
-    console.log(`Filtered ${validCoords.length} valid coords out of ${batchRef.current.length}`);
-    
-    if (validCoords.length === 0) {
-      batchRef.current = [];
-      console.log('No valid coordinates to send');
-      return;
-    }
-    
-    const toSend = [...validCoords];
+    // Send everything currently queued; do not discard older points
+    const toSend = [...batchRef.current];
     batchRef.current = [];
-    lastFlushRef.current = now;
+    lastFlushRef.current = Date.now();
     
     console.log('Sending coordinates to backend:', toSend);
     
     try {
-      const result = await GatewayAPI.addCoordinates(routeId, userId, toSend);
+      const result = await GatewayAPI.addCoordinates(currentRouteId, currentUserId, toSend);
       console.log(`Successfully flushed ${toSend.length} coordinates to backend:`, result);
-    } catch (error) {
+
+      if (!result.ok) {
+        // Handle specific API errors
+        const errorDetail = result.error;
+        let errorMessage = "Failed to save coordinates";
+
+        if (typeof errorDetail === 'object' && errorDetail !== null) {
+          const detail = errorDetail as any;
+          if (detail.error === 'Coordinate validation failed') {
+            errorMessage = `Coordinate validation failed: ${detail.message}`;
+          } else if (detail.error === 'Internal server error') {
+            errorMessage = "Server error occurred while saving coordinates";
+          } else if (detail.message) {
+            errorMessage = detail.message;
+          }
+        } else if (typeof errorDetail === 'string') {
+          errorMessage = errorDetail;
+        }
+
+        console.error('API returned error:', errorMessage);
+        setError(errorMessage);
+      }
+    } catch (error: any) {
       console.error('Failed to flush coordinates:', error);
-      // Re-queue failed coordinates if they're still recent
-      const stillValid = toSend.filter(coord => {
-        const age = Date.now() - new Date(coord.timestamp).getTime();
-        return age <= MAX_COORDINATE_AGE_MS;
-      });
-      batchRef.current = [...stillValid, ...batchRef.current];
-      console.log('Re-queued', stillValid.length, 'coordinates after failure');
+
+      // Extract meaningful error message
+      let errorMessage = "Failed to save coordinates";
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+
+      setError(errorMessage);
+
+      // Re-queue failed coordinates to attempt on next flush
+      batchRef.current = [...toSend, ...batchRef.current];
+      console.log('Re-queued', toSend.length, 'coordinates after failure');
     }
-  }, [userId, routeId]);
+  }, []);
 
   const start = useCallback(async (opts?: StartOptions) => {
     console.log('Starting route tracking with userId:', userId, 'opts:', opts);
@@ -139,6 +170,7 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
       if (active.ok && (active.data as any)?.id) {
         const ar = (active.data as any);
         setRouteId(String(ar.id));
+        setTrackedCoordinates(ar.coordinates || []);
         haveRoute = true;
         console.log('Resumed existing route:', ar.id);
       }
@@ -174,6 +206,7 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
       const onSimulatedPosition = (e: Event) => {
         const detail: any = (e as CustomEvent).detail;
         if (!detail) return;
+        setCurrentLocation(detail as GeolocationPosition);
         const c: CoordinateInput = {
           latitude: detail.coords.latitude,
           longitude: detail.coords.longitude,
@@ -185,7 +218,9 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
         };
         if (!isValidCoordinate(c)) return;
         batchRef.current.push(c);
-        if (batchRef.current.length >= BATCH_SIZE) {
+        setTrackedCoordinates((prev) => [...prev, c]);
+        // Flush more aggressively when simulator is active to keep the map path up-to-date
+        if (batchRef.current.length >= Math.max(3, Math.floor(BATCH_SIZE / 2))) {
           flushBatch();
         }
       };
@@ -195,65 +230,96 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
       // start real GPS
       if ("geolocation" in navigator) {
         console.log('Setting up GPS tracking...');
-        const geoOptions: PositionOptions = {
-          enableHighAccuracy: true,
-          maximumAge: 2000, // Accept cached positions up to 2 seconds old
-          timeout: 10000 // 10 second timeout
-        };
-
-        watchIdRef.current = navigator.geolocation.watchPosition(
-          (pos) => {
-            const c: CoordinateInput = {
-              latitude: pos.coords.latitude,
-              longitude: pos.coords.longitude,
-              altitude: pos.coords.altitude ?? null,
-              accuracy: pos.coords.accuracy ?? null,
-              speed: pos.coords.speed ?? null,
-              bearing: pos.coords.heading ?? null,
-              timestamp: new Date().toISOString(),
-            };
+        
+        const handleSuccess = (pos: GeolocationPosition) => {
+          setCurrentLocation(pos);
+          const c: CoordinateInput = {
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            altitude: pos.coords.altitude ?? null,
+            accuracy: pos.coords.accuracy ?? null,
+            speed: pos.coords.speed ?? null,
+            bearing: pos.coords.heading ?? null,
+            timestamp: new Date().toISOString(),
+          };
+          
+          console.log('Received GPS coordinate:', c);
+          
+          if (!isValidCoordinate(c)) {
+            console.warn('Invalid GPS coordinate received:', c);
+            return;
+          }
+          
+          if (batchRef.current.length > 0) {
+            const lastCoord = batchRef.current[batchRef.current.length - 1];
+            const distance = calculateHaversineDistance(
+              lastCoord.latitude, lastCoord.longitude,
+              c.latitude, c.longitude
+            );
             
-            console.log('Received GPS coordinate:', c);
-            
-            // Validate coordinate before adding
-            if (!isValidCoordinate(c)) {
-              console.warn('Invalid GPS coordinate received:', c);
+            if (distance < 1.0) {
+              console.log('Skipping coordinate - too close to previous:', distance.toFixed(2) + 'm');
               return;
             }
-            
-            // Check for duplicate/close coordinates (more lenient for GPS simulator)
-            if (batchRef.current.length > 0) {
-              const lastCoord = batchRef.current[batchRef.current.length - 1];
-              const distance = calculateHaversineDistance(
-                lastCoord.latitude, lastCoord.longitude,
-                c.latitude, c.longitude
-              );
-              
-              if (distance < 1.0) { // Reduced from 2m to 1m to be less restrictive
-                console.log('Skipping coordinate - too close to previous:', distance.toFixed(2) + 'm');
-                return;
+          }
+          
+          console.log('Adding coordinate to batch, queue size:', batchRef.current.length + 1);
+          batchRef.current.push(c);
+          setTrackedCoordinates((prev) => [...prev, c]);
+          if (batchRef.current.length >= BATCH_SIZE) {
+            console.log('Batch full, flushing coordinates');
+            flushBatch();
+          }
+        };
+
+        const handleError = (error: GeolocationPositionError) => {
+          setError(`GPS Error: ${error.message}`);
+          setCurrentLocation(null);
+        };
+
+        const onSimulatedPosition = (e: Event) => {
+          const customEvent = e as CustomEvent;
+          if (customEvent.detail && customEvent.detail.position) {
+            handleSuccess(customEvent.detail.position as GeolocationPosition);
+          }
+        };
+        
+        // Check for GPS Simulator events
+        document.addEventListener("gps-sim-update", onSimulatedPosition);
+
+        const startWatcher = (highAccuracy = true) => {
+          if (watchIdRef.current !== null) {
+            navigator.geolocation.clearWatch(watchIdRef.current);
+          }
+
+          try {
+            watchIdRef.current = navigator.geolocation.watchPosition(
+              handleSuccess,
+              (error) => {
+                // If high accuracy fails, try with low accuracy
+                if (highAccuracy) {
+                  startWatcher(false);
+                }
+                handleError(error);
+              },
+              {
+                enableHighAccuracy: highAccuracy,
+                timeout: 20000, // 20 second timeout, reduced from 30
+                maximumAge: 0,
               }
-            }
-            
-            console.log('Adding coordinate to batch, queue size:', batchRef.current.length + 1);
-            batchRef.current.push(c);
-            if (batchRef.current.length >= BATCH_SIZE) {
-              console.log('Batch full, flushing coordinates');
-              flushBatch();
-            }
-          },
-          (error) => {
-            const errorMessages = {
-              1: "Location permission denied. Please enable location access.",
-              2: "Location unavailable. Check your device's GPS settings.",
-              3: "Location request timed out. Please try again."
-            };
-            setError(errorMessages[error.code as keyof typeof errorMessages] || "Location access failed");
-          },
-          geoOptions
-        );
+            );
+          } catch (err: unknown) {
+            const error = err as Error;
+            setError(`Could not start GPS watcher: ${error.message}`);
+          }
+        };
+
+        if (isTracking) {
+          startWatcher();
+        }
       } else {
         setError("Geolocation is not supported in this browser");
+        return false;
       }
 
       return true;
@@ -261,9 +327,9 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
       setError("Failed to start tracking");
       return false;
     }
-  }, [userId, flushBatch]);
+  }, [userId, flushBatch, isTracking]);
 
-  const stop = useCallback(async (completeAndClaim?: boolean) => {
+  const stop = useCallback(async (completeAndClaim?: boolean, name?: string) => {
     try {
       if (tickTimerRef.current != null) {
         clearInterval(tickTimerRef.current);
@@ -280,32 +346,126 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
       await flushBatch();
 
       if (userId && routeId) {
-        const completed = await GatewayAPI.completeRoute(routeId, userId, { force_completion: false });
-        
-        if (!completed.ok) {
-          // Handle API error
-          throw completed;
-        }
-        
-        const data = (completed.data as any) || {};
+        const completionPayload = {
+          name: name || `Route ${new Date().toISOString()}`,
+          completion: {
+            completed_at: new Date().toISOString(),
+            distance: 0, // These are calculated server-side now
+            duration: elapsedMs / 1000,
+          },
+        };
 
-        // Optionally claim territory
-        if (completeAndClaim && data?.territory_polygon && Array.isArray(data.territory_polygon)) {
-          const boundary_coordinates = (data.territory_polygon as number[][]).map(([lon, lat]) => ({ longitude: lon, latitude: lat }));
-          await GatewayAPI.claimTerritoryFromRoute(userId, { route_id: routeId, boundary_coordinates });
+        if (!navigator.onLine) {
+            console.log("Offline: Queuing route completion for background sync.");
+            const { getOfflineSyncManager } = await import('@/lib/network/offline-sync');
+            const syncManager = getOfflineSyncManager();
+            if (syncManager) {
+                syncManager.addOfflineOperation({
+                    type: 'COMPLETE_ROUTE',
+                    data: { routeId, userId, completion: completionPayload },
+                    userId
+                });
+            }
+        } else {
+            const completed = await GatewayAPI.completeRoute(routeId, userId, completionPayload);
+            if (!completed.ok) {
+                // Handle API error
+                throw completed;
+            }
+
+            const data = (completed.data as any) || {};
+
+            // Optionally claim territory
+            if (completeAndClaim && data?.territory_polygon && Array.isArray(data.territory_polygon)) {
+              const boundary_coordinates = (data.territory_polygon as number[][]).map(([lon, lat]) => ({ longitude: lon, latitude: lat }));
+              await GatewayAPI.claimTerritoryFromRoute(userId, { route_id: routeId, boundary_coordinates });
+            }
         }
       }
 
       setIsTracking(false);
+      setCurrentLocation(null);
       setRouteId(null);
       setStartedAt(null);
       setElapsedMs(0);
+      setTrackedCoordinates([]);
       return true;
     } catch (e: any) {
       console.error("Route completion error:", e);
       
       // Extract meaningful error message
       let errorMessage = "Failed to stop route";
+      const errorObj = e?.error;
+
+      if (typeof errorObj === 'object' && errorObj !== null) {
+        if (typeof errorObj.message === 'string') {
+          errorMessage = errorObj.message;
+        } else if (typeof errorObj.detail === 'string') {
+          errorMessage = errorObj.detail;
+        } else if (errorObj.error && typeof errorObj.error === 'string') {
+          errorMessage = errorObj.error;
+        } else {
+          try {
+            errorMessage = JSON.stringify(errorObj);
+          } catch {
+            errorMessage = "An unknown error occurred while stopping the route."
+          }
+        }
+      } else if (e?.message) {
+        errorMessage = e.message;
+      } else if (typeof e === 'string') {
+        errorMessage = e;
+      }
+      
+      setError(errorMessage);
+      return false;
+    }
+  }, [userId, routeId, flushBatch, elapsedMs]);
+
+  const cancel = useCallback(async () => {
+    try {
+      // Stop all tracking first
+      if (tickTimerRef.current != null) {
+        clearInterval(tickTimerRef.current);
+        tickTimerRef.current = null;
+      }
+      if (watchIdRef.current != null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      if (simHandlerRef.current) {
+        window.removeEventListener('gps:position', simHandlerRef.current as unknown as EventListener);
+        simHandlerRef.current = null;
+      }
+
+      // Clear local state immediately for better UX
+      setIsTracking(false);
+      const currentRouteId = routeId;
+      setRouteId(null);
+      setStartedAt(null);
+      setElapsedMs(0);
+      setError(null);
+      setCurrentLocation(null);
+      batchRef.current = [];
+      setTrackedCoordinates([]);
+
+      // Delete the route from backend if we have one
+      if (userId && currentRouteId) {
+        console.log("Deleting route from backend:", currentRouteId);
+        const result = await GatewayAPI.deleteRoute(currentRouteId, userId);
+        if (!result.ok) {
+          console.error("Failed to delete route:", result);
+          throw new Error("Failed to delete route from server");
+        }
+        console.log("Route deleted successfully from backend");
+      }
+      
+      console.log("Route cancelled and deleted successfully");
+      return true;
+    } catch (e: any) {
+      console.error("Route cancellation error:", e);
+      
+      let errorMessage = "Failed to cancel route";
       if (e?.error?.detail) {
         errorMessage = e.error.detail;
       } else if (e?.message) {
@@ -317,7 +477,11 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
       setError(errorMessage);
       return false;
     }
-  }, [userId, routeId, flushBatch]);
+  }, [userId, routeId]);
+
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
 
   const cleanup = useCallback(() => {
     // Remove simulated event listener(s)
@@ -337,10 +501,12 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
     
     // Clear local state
     setIsTracking(false);
+    setCurrentLocation(null);
     setRouteId(null);
     setStartedAt(null);
     setElapsedMs(0);
     setError(null);
+    setTrackedCoordinates([]);
     
     // Clear batch (don't flush since route is already completed)
     batchRef.current = [];
@@ -349,7 +515,21 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
   }, []);
 
   useEffect(() => {
+    // Flush on tab hide/unload to avoid losing queued points
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        flushBatch();
+      }
+    };
+    const onPageHide = () => {
+      flushBatch();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pagehide', onPageHide);
+
     return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pagehide', onPageHide);
       if (tickTimerRef.current != null) clearInterval(tickTimerRef.current);
       if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
     };
@@ -360,11 +540,16 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
     startedAt,
     elapsedMs,
     routeId,
+    currentLocation,
+    trackedCoordinates,
     start,
     stop,
+    cancel,
     cleanup,
     error,
-  }), [isTracking, startedAt, elapsedMs, routeId, start, stop, cleanup, error]);
+    clearError,
+    flush: flushBatch,
+  }), [isTracking, startedAt, elapsedMs, routeId, start, stop, cancel, cleanup, error, currentLocation, trackedCoordinates, clearError, flushBatch]);
 
   return value;
 }

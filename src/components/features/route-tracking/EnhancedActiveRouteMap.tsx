@@ -2,17 +2,22 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { MapContainer, TileLayer } from 'react-leaflet';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Maximize2, Minimize2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
+import { Maximize2, Minimize2, RotateCcw, ZoomIn, ZoomOut, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import MapPanes from './components/MapPanes';
 import MapResizeFix from './components/MapResizeFix';
 import AnimatedCurrentPosition from './components/AnimatedCurrentPosition';
 import AnimatedRoutePolyline from './components/AnimatedRoutePolyline';
+import TerritoryPreview from '../territory/TerritoryPreview';
+import TerritoryAreaDisplay from '../territory/TerritoryAreaDisplay';
 import { calculateBounds, calculateCenter, TILE_DARK_WITH_LABELS } from './utils/mapUtils';
+import { useTerritoryPreviewManager } from '@/hooks/useTerritoryPreview';
+import { useTerritoryContext } from '@/contexts/TerritoryContext';
 import type { RouteDetail } from '@/lib/api/types/routes';
 import type { Coordinate } from '@/lib/api/types/common';
 import L from 'leaflet'; // no named type imports
 import 'leaflet/dist/leaflet.css';
+import '../territory/TerritoryPreview.css';
 
 type LeafletMap = ReturnType<typeof L.map>;
 type LeafletBounds = ReturnType<typeof L.latLngBounds>;
@@ -27,13 +32,13 @@ export interface EnhancedGPSCoordinate extends Coordinate {
 
 // Map view state interface
 export interface MapViewState {
-  center: [number, number];
-  zoom: number;
-  bounds: LeafletBounds | null;
-  isFullscreen: boolean;
-  followMode: boolean;
-  selectedLayers: string[];
-  animationsEnabled: boolean;
+    center: [number, number];
+    zoom: number;
+    bounds: LeafletBounds | null;
+    isFullscreen: boolean;
+    followMode: boolean;
+    selectedLayers: string[];
+    animationsEnabled: boolean;
 }
 
 // Animation configuration interface
@@ -70,6 +75,8 @@ export interface EnhancedActiveRouteMapProps {
     className?: string;
     height?: string;
     fullscreenEnabled?: boolean;
+    territoryPreviewEnabled?: boolean;
+    onTerritoryPreviewClick?: (preview: any) => void;
 }
 
 // Default animation configuration
@@ -101,6 +108,8 @@ export default function EnhancedActiveRouteMap({
     className = '',
     height = '400px',
     fullscreenEnabled = true,
+    territoryPreviewEnabled = true,
+    onTerritoryPreviewClick,
 }: EnhancedActiveRouteMapProps) {
     // Map view state management
     const [mapViewState, setMapViewState] = useState<MapViewState>(() => {
@@ -140,6 +149,9 @@ export default function EnhancedActiveRouteMap({
 
     // Previous location for smooth transitions
     const [previousLocation, setPreviousLocation] = useState<GeolocationPosition | null>(null);
+
+    // Territory preview state
+    const [territoryPreviewVisible, setTerritoryPreviewVisible] = useState(territoryPreviewEnabled);
 
     // Enhanced coordinates with additional metadata
     const enhancedCoordinates = useMemo((): EnhancedGPSCoordinate[] => {
@@ -182,6 +194,22 @@ export default function EnhancedActiveRouteMap({
             };
         });
     }, [activeRoute.coordinates]);
+
+    // Territory context for real-time updates
+    const territoryContext = useTerritoryContext();
+
+    // Territory preview data management
+    const territoryPreview = useTerritoryPreviewManager(
+        activeRoute.id,
+        userId,
+        enhancedCoordinates,
+        {
+            enableRealTime: territoryPreviewEnabled && territoryPreviewVisible,
+            enableRoutePreview: territoryPreviewEnabled,
+            realTimeDebounce: 2000, // 2 second debounce for real-time updates
+            refetchInterval: 30000, // 30 second refresh for route preview
+        }
+    );
 
     // Calculate route statistics
     const routeStats = useMemo((): RouteStats => {
@@ -234,6 +262,7 @@ export default function EnhancedActiveRouteMap({
             coordinateCount: coordinates.length,
             isClosedLoop,
             gpsAccuracy: currentLocation?.coords.accuracy || 0,
+            territoryArea: territoryPreview.preview?.area_square_meters || 0,
         };
     }, [enhancedCoordinates, currentLocation]);
 
@@ -278,6 +307,18 @@ export default function EnhancedActiveRouteMap({
             mapInstance.fitBounds(mapViewState.bounds, { padding: [20, 20] });
         }
     }, [mapInstance, mapViewState.bounds]);
+
+    // Handle territory preview toggle
+    const handleTerritoryPreviewToggle = useCallback(() => {
+        setTerritoryPreviewVisible(prev => !prev);
+    }, []);
+
+    // Handle territory preview click
+    const handleTerritoryPreviewClick = useCallback((preview: any) => {
+        if (onTerritoryPreviewClick) {
+            onTerritoryPreviewClick(preview);
+        }
+    }, [onTerritoryPreviewClick]);
 
     // Update map view when route coordinates change
     useEffect(() => {
@@ -324,19 +365,39 @@ export default function EnhancedActiveRouteMap({
             setPreviousLocation(prev => {
                 // Only update if location has actually changed significantly
                 if (!prev) return currentLocation;
-                
+
                 const distance = calculateDistance(
                     prev.coords.latitude,
                     prev.coords.longitude,
                     currentLocation.coords.latitude,
                     currentLocation.coords.longitude
                 );
-                
+
                 // Update previous location if moved more than 1 meter
                 return distance > 1 ? prev : currentLocation;
             });
         }
     }, [currentLocation]);
+
+    // Update territory preview when coordinates change significantly
+    useEffect(() => {
+        if (territoryPreviewEnabled && territoryPreviewVisible && enhancedCoordinates.length >= 3) {
+            // Debounce the update to avoid excessive API calls
+            const timeoutId = setTimeout(() => {
+                territoryPreview.updateRealTimePreview();
+            }, 2000);
+
+            return () => clearTimeout(timeoutId);
+        }
+    }, [enhancedCoordinates.length, territoryPreviewEnabled, territoryPreviewVisible, territoryPreview]);
+
+    // Refresh territory preview when territory updates are received via WebSocket
+    useEffect(() => {
+        if (territoryPreviewEnabled && territoryContext.lastUpdate) {
+            // Refresh the route-based preview when territories change
+            territoryPreview.refreshRoutePreview();
+        }
+    }, [territoryContext.lastUpdate, territoryPreviewEnabled, territoryPreview]);
 
     // Render map controls
     const renderMapControls = () => (
@@ -370,6 +431,28 @@ export default function EnhancedActiveRouteMap({
                     >
                         <RotateCcw className="h-4 w-4" />
                     </Button>
+                    {territoryPreviewEnabled && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleTerritoryPreviewToggle}
+                            className={cn(
+                                "h-8 w-8 p-0",
+                                territoryContext.isConnected && "ring-2 ring-green-500 ring-opacity-50"
+                            )}
+                            title={
+                                territoryPreviewVisible 
+                                    ? `Hide Territory Preview${territoryContext.isConnected ? ' (Live Updates)' : ' (Offline)'}` 
+                                    : `Show Territory Preview${territoryContext.isConnected ? ' (Live Updates)' : ' (Offline)'}`
+                            }
+                        >
+                            {territoryPreviewVisible ? (
+                                <Eye className="h-4 w-4" />
+                            ) : (
+                                <EyeOff className="h-4 w-4" />
+                            )}
+                        </Button>
+                    )}
                     {fullscreenEnabled && (
                         <Button
                             variant="ghost"
@@ -472,14 +555,43 @@ export default function EnhancedActiveRouteMap({
                     />
                 )}
 
+                {/* Territory Preview Overlay */}
+                {territoryPreviewEnabled && territoryPreviewVisible && territoryPreview.preview && (
+                    <TerritoryPreview
+                        preview={territoryPreview.preview}
+                        isLoading={territoryPreview.isLoading}
+                        visible={territoryPreviewVisible}
+                        animationConfig={{
+                            enabled: animationConfig.enableReducedMotion ? false : mapViewState.animationsEnabled,
+                            duration: animationConfig.statsUpdateDuration,
+                            pulseSpeed: animationConfig.pulseAnimationSpeed,
+                        }}
+                        onPreviewClick={handleTerritoryPreviewClick}
+                    />
+                )}
+
                 {/* TODO: Add additional route visualization components here in future tasks */}
                 {/* - RouteMarkers */}
                 {/* - GPSAccuracyIndicator */}
-                {/* - TerritoryPreviewPolygon */}
             </MapContainer>
 
             {/* Map Controls */}
             {renderMapControls()}
+
+            {/* Territory Area Display */}
+            {territoryPreviewEnabled && territoryPreviewVisible && (
+                <TerritoryAreaDisplay
+                    preview={territoryPreview.preview}
+                    isLoading={territoryPreview.isLoading}
+                    position="top-left"
+                    showConflicts={true}
+                    connectionStatus={{
+                        isConnected: territoryContext.isConnected,
+                        error: territoryContext.connectionError,
+                        lastUpdate: territoryContext.lastUpdate,
+                    }}
+                />
+            )}
 
             {/* TODO: Add floating components here in future tasks */}
             {/* - FloatingStatsPanel */}

@@ -1,7 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { GatewayAPI } from '@/lib/api';
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
+import { GatewayAPI } from "@/lib/api";
 import { queryKeys, invalidateQueries } from '@/lib/query';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from "sonner";
 
 // Auth queries
 export const useMe = () => {
@@ -162,7 +163,7 @@ export const useRouteStatistics = (routeId: string, userId: string) => {
 };
 
 // Territory queries
-export const useTerritoriesMap = (params?: Record<string, any>) => {
+export const useTerritoriesMap = (params?: { [key: string]: string | number | boolean }) => {
   return useQuery({
     queryKey: queryKeys.territoriesMap(params),
     queryFn: async () => {
@@ -229,6 +230,140 @@ export const useNearbyTerritories = (latitude: number, longitude: number, radius
       return result.data;
     },
     enabled: !!latitude && !!longitude,
+  });
+};
+
+export const useTerritoryPreview = ({
+  routeId,
+  autoRefresh,
+  refreshInterval,
+}: {
+  routeId: string;
+  autoRefresh?: boolean;
+  refreshInterval?: number;
+}) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['territories', 'preview', routeId],
+    queryFn: async () => {
+      if (!user?.id) throw new Error("User not authenticated");
+      const result = await GatewayAPI.getTerritoryPreview(routeId, user.id);
+      if (!result.ok) {
+        throw result;
+      }
+      return result.data;
+    },
+    enabled: !!routeId && !!user?.id,
+    refetchInterval: autoRefresh ? refreshInterval ?? 5000 : false,
+  });
+};
+
+// Real-time territory preview for coordinates
+export const useRealTimeTerritoryPreview = (coordinates: Array<{ longitude: number; latitude: number }>) => {
+  return useQuery({
+    queryKey: queryKeys.territoryPreview(coordinates),
+    queryFn: async () => {
+      const result = await GatewayAPI.getRealTimeTerritoryPreview(coordinates);
+      if (!result.ok) {
+        throw result;
+      }
+      return result.data;
+    },
+    enabled: coordinates.length > 0,
+    staleTime: 1000, // Very short stale time for real-time updates
+  });
+};
+
+// Territory statistics hooks
+export const useUserTerritoryStatistics = (userId: string) => {
+  return useQuery({
+    queryKey: queryKeys.territoryStatistics(userId),
+    queryFn: async () => {
+      const result = await GatewayAPI.getUserTerritoryStatistics(userId);
+      if (!result.ok) {
+        throw result;
+      }
+      return result.data;
+    },
+    enabled: !!userId,
+  });
+};
+
+export const useGlobalTerritoryStatistics = () => {
+  return useQuery({
+    queryKey: queryKeys.globalTerritoryStatistics(),
+    queryFn: async () => {
+      const result = await GatewayAPI.getGlobalTerritoryStatistics();
+      if (!result.ok) {
+        throw result;
+      }
+      return result.data;
+    },
+    refetchInterval: 60000, // Refetch every minute for global stats
+  });
+};
+
+export const useTerritoryStatistics = (userId: string) => {
+  return useQuery({
+    queryKey: queryKeys.territoryStatistics(userId),
+    queryFn: async () => {
+      const result = await GatewayAPI.getTerritoryStatistics(userId);
+      if (!result.ok) {
+        throw result;
+      }
+      return result.data;
+    },
+    enabled: !!userId,
+  });
+};
+
+// Territory leaderboard hooks
+export const useTerritoryLeaderboard = (
+  metric: string = "total_area",
+  limit: number = 50,
+  offset: number = 0
+) => {
+  return useQuery({
+    queryKey: queryKeys.territoryLeaderboard(metric, limit, offset),
+    queryFn: async () => {
+      const result = await GatewayAPI.getTerritoryLeaderboard(metric, limit, offset);
+      if (!result.ok) {
+        throw result;
+      }
+      return result.data;
+    },
+    refetchInterval: 30000, // Refetch every 30 seconds for leaderboards
+  });
+};
+
+export const useLeaderboardByArea = (limit: number = 50, offset: number = 0) => {
+  return useTerritoryLeaderboard("total_area", limit, offset);
+};
+
+export const useLeaderboardByCount = (limit: number = 50, offset: number = 0) => {
+  return useTerritoryLeaderboard("territory_count", limit, offset);
+};
+
+export const useLeaderboardByActivity = (limit: number = 50, offset: number = 0) => {
+  return useTerritoryLeaderboard("recent_activity", limit, offset);
+};
+
+export const useLeaderboardByAverageArea = (limit: number = 50, offset: number = 0) => {
+  return useTerritoryLeaderboard("average_area", limit, offset);
+};
+
+// Territory validation hooks
+export const useRouteTerritoryEligibility = (routeId: string) => {
+  return useQuery({
+    queryKey: queryKeys.territoryValidation(routeId),
+    queryFn: async () => {
+      const result = await GatewayAPI.validateRouteTerritoryEligibility(routeId);
+      if (!result.ok) {
+        throw result;
+      }
+      return result.data;
+    },
+    enabled: !!routeId,
   });
 };
 
@@ -328,23 +463,22 @@ export const useCompleteRoute = () => {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async (data: { 
-      routeId: string; 
-      completion: { end_coordinate?: any; force_completion?: boolean };
-    }) => {
-      if (!user?.id) throw new Error('User not authenticated');
-      
-      const result = await GatewayAPI.completeRoute(data.routeId, user.id, data.completion);
-      if (!result.ok) {
-        throw result;
-      }
-      return result.data;
+    mutationFn: (routeId: string) => {
+      if (!user?.id) throw new Error("User not authenticated");
+      return GatewayAPI.completeRoute(routeId, user.id, {});
     },
-    onSuccess: () => {
+    onSuccess: (_, routeId) => {
+      toast.success("Route completed!");
       if (user?.id) {
         invalidateQueries.routes(queryClient, user.id);
+        // Also invalidate user profile data as it contains stats
         invalidateQueries.userProfile(queryClient, user.id);
       }
+      // Invalidate territories as completing a route might claim new ones
+      invalidateQueries.territories(queryClient, user?.id);
+    },
+    onError: (error) => {
+      toast.error(`Failed to complete route: ${error.message}`);
     },
   });
 };
@@ -397,6 +531,33 @@ export const useClaimTerritory = () => {
         invalidateQueries.userProfile(queryClient, user.id);
         invalidateQueries.leaderboard(queryClient);
       }
+    },
+  });
+};
+
+export const useValidateTerritoryClaimFromRoute = () => {
+  return useMutation({
+    mutationFn: async (data: {
+      routeId: string;
+      boundaryCoordinates: Array<{ longitude: number; latitude: number }>;
+    }) => {
+      const result = await GatewayAPI.validateTerritoryClaimFromRoute(data.routeId, data.boundaryCoordinates);
+      if (!result.ok) {
+        throw result;
+      }
+      return result.data;
+    },
+  });
+};
+
+export const useCalculateTerritoryPreview = () => {
+  return useMutation({
+    mutationFn: async (coordinates: Array<{ longitude: number; latitude: number }>) => {
+      const result = await GatewayAPI.calculateTerritoryPreview(coordinates);
+      if (!result.ok) {
+        throw result;
+      }
+      return result.data;
     },
   });
 };

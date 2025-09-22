@@ -1,209 +1,251 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo } from 'react';
 import { GatewayAPI } from '@/lib/api';
-import { useAuth } from './useAuth';
+import type { TerritoryPreview, RealTimeTerritoryPreviewRequest } from '@/lib/api/types/territory-preview';
+import type { Coordinate } from '@/lib/api/types/common';
 
-interface TerritoryEligibilityIndicators {
-  has_minimum_points: boolean;
-  is_approaching_closure: boolean;
-  has_sufficient_area: boolean;
-  gps_quality_acceptable: boolean;
-  route_complexity_good: boolean;
-}
+/**
+ * Hook for managing territory preview data from route coordinates
+ */
+export function useTerritoryPreview(routeId: string, userId: string, options?: {
+  enabled?: boolean;
+  refetchInterval?: number;
+}) {
+  const { enabled = true, refetchInterval } = options || {};
 
-interface ClosureGuidance {
-  distance_to_start: number | null;
-  recommended_direction: string | null;
-  closure_feasible: boolean;
-}
-
-interface TerritoryPreview {
-  route_id: string;
-  area_km2: number;
-  perimeter_km: number;
-  is_valid: boolean;
-  claiming_probability: number;
-  boundary: Array<{
-    latitude: number;
-    longitude: number;
-  }>;
-  closure_distance_m: number | null;
-  min_points_needed: number;
-  gps_quality_issues: string[];
-  territory_eligibility_indicators: TerritoryEligibilityIndicators;
-  closure_guidance: ClosureGuidance;
-  calculation_time_ms?: number;
-}
-
-interface UseTerritoryPreviewOptions {
-  routeId?: string;
-  autoRefresh?: boolean;
-  refreshInterval?: number;
-}
-
-export const useTerritoryPreview = (options: UseTerritoryPreviewOptions = {}) => {
-  const { routeId, autoRefresh = false, refreshInterval = 10000 } = options;
-  const { user } = useAuth();
-  const [preview, setPreview] = useState<TerritoryPreview | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-
-  const fetchPreview = useCallback(async () => {
-    if (!routeId || !user) {
-      setPreview(null);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await GatewayAPI.getTerritoryPreview(routeId, user.id);
-      
-      if (response.ok && response.data) {
-        setPreview(response.data as TerritoryPreview);
-        setLastUpdated(new Date());
-      } else {
-        // Route might not be eligible for preview (not enough points, etc.)
-        setPreview(null);
-        if (response.status !== 404) {
-          setError('Failed to fetch territory preview');
-        }
+  return useQuery({
+    queryKey: ['territory-preview', routeId, userId],
+    queryFn: async () => {
+      const response = await GatewayAPI.getTerritoryPreview(routeId, userId);
+      if (!response.ok) {
+        throw new Error(response.error as string || 'Failed to fetch territory preview');
       }
-    } catch (err) {
-      console.error('Error fetching territory preview:', err);
-      setError('Failed to fetch territory preview');
-      setPreview(null);
-    } finally {
-      setLoading(false);
+      return response.data;
+    },
+    enabled: enabled && !!routeId && !!userId,
+    refetchInterval,
+    staleTime: 30000, // 30 seconds
+    gcTime: 300000, // 5 minutes
+  });
+}
+
+/**
+ * Hook for real-time territory preview calculation from coordinates
+ */
+export function useRealTimeTerritoryPreview(options?: {
+  enabled?: boolean;
+  debounceMs?: number;
+}) {
+  const { enabled = true, debounceMs = 1000 } = options || {};
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: async (coordinates: Coordinate[]) => {
+      // Convert coordinates to the expected format
+      const geoPoints = coordinates.map(coord => ({
+        longitude: coord.longitude,
+        latitude: coord.latitude,
+      }));
+
+      const response = await GatewayAPI.getRealTimeTerritoryPreview(geoPoints);
+      if (!response.ok) {
+        throw new Error(response.error as string || 'Failed to calculate territory preview');
+      }
+      return response.data;
+    },
+    onSuccess: (data, coordinates) => {
+      // Cache the result for potential reuse
+      const cacheKey = ['real-time-territory-preview', coordinates.length];
+      queryClient.setQueryData(cacheKey, data);
+    },
+  });
+
+  const calculatePreview = useCallback(
+    (coordinates: Coordinate[]) => {
+      if (!enabled || coordinates.length < 3) {
+        return;
+      }
+      mutation.mutate(coordinates);
+    },
+    [enabled, mutation]
+  );
+
+  return {
+    calculatePreview,
+    preview: mutation.data,
+    isLoading: mutation.isPending,
+    error: mutation.error,
+    isError: mutation.isError,
+    reset: mutation.reset,
+  };
+}
+
+/**
+ * Hook for managing territory preview state and calculations
+ */
+export function useTerritoryPreviewManager(
+  routeId: string,
+  userId: string,
+  coordinates: Coordinate[],
+  options?: {
+    enableRealTime?: boolean;
+    enableRoutePreview?: boolean;
+    realTimeDebounce?: number;
+    refetchInterval?: number;
+  }
+) {
+  const {
+    enableRealTime = true,
+    enableRoutePreview = true,
+    realTimeDebounce = 1000,
+    refetchInterval = 30000,
+  } = options || {};
+
+  // Route-based territory preview
+  const routePreview = useTerritoryPreview(routeId, userId, {
+    enabled: enableRoutePreview,
+    refetchInterval,
+  });
+
+  // Real-time territory preview
+  const realTimePreview = useRealTimeTerritoryPreview({
+    enabled: enableRealTime,
+    debounceMs: realTimeDebounce,
+  });
+
+  // Determine which preview to use
+  const activePreview = useMemo(() => {
+    // Prefer real-time preview if available and recent
+    if (realTimePreview.preview && !realTimePreview.isLoading) {
+      return {
+        data: realTimePreview.preview,
+        isLoading: false,
+        error: realTimePreview.error,
+        source: 'real-time' as const,
+      };
     }
-  }, [routeId, user]);
 
-  // Initial fetch
-  useEffect(() => {
-    fetchPreview();
-  }, [fetchPreview]);
+    // Fall back to route preview
+    if (routePreview.data) {
+      return {
+        data: routePreview.data,
+        isLoading: routePreview.isLoading,
+        error: routePreview.error,
+        source: 'route' as const,
+      };
+    }
 
-  // Auto-refresh
-  useEffect(() => {
-    if (!autoRefresh || !routeId) return;
+    // Loading state
+    return {
+      data: null,
+      isLoading: routePreview.isLoading || realTimePreview.isLoading,
+      error: routePreview.error || realTimePreview.error,
+      source: 'none' as const,
+    };
+  }, [
+    realTimePreview.preview,
+    realTimePreview.isLoading,
+    realTimePreview.error,
+    routePreview.data,
+    routePreview.isLoading,
+    routePreview.error,
+  ]);
 
-    const interval = setInterval(fetchPreview, refreshInterval);
-    return () => clearInterval(interval);
-  }, [autoRefresh, routeId, refreshInterval, fetchPreview]);
+  // Auto-calculate real-time preview when coordinates change
+  const updateRealTimePreview = useCallback(() => {
+    if (enableRealTime && coordinates.length >= 3) {
+      realTimePreview.calculatePreview(coordinates);
+    }
+  }, [enableRealTime, coordinates, realTimePreview]);
 
-  // Manual refresh
-  const refresh = useCallback(() => {
-    fetchPreview();
-  }, [fetchPreview]);
+  return {
+    // Active preview data
+    preview: activePreview.data,
+    isLoading: activePreview.isLoading,
+    error: activePreview.error,
+    source: activePreview.source,
 
-  // Calculate enhanced preview status
-  const previewStatus = preview ? (() => {
-    const issues = Array.isArray(preview.gps_quality_issues) ? preview.gps_quality_issues : [];
-    const indicators = preview.territory_eligibility_indicators || {
-      has_minimum_points: false,
-      is_approaching_closure: false,
-      has_sufficient_area: false,
-      gps_quality_acceptable: true,
-      route_complexity_good: true,
-    } as TerritoryEligibilityIndicators;
-    const guidance = preview.closure_guidance || {
-      distance_to_start: null,
-      recommended_direction: null,
-      closure_feasible: false,
-    } as ClosureGuidance;
+    // Individual preview sources
+    routePreview: {
+      data: routePreview.data,
+      isLoading: routePreview.isLoading,
+      error: routePreview.error,
+      refetch: routePreview.refetch,
+    },
+    realTimePreview: {
+      data: realTimePreview.preview,
+      isLoading: realTimePreview.isLoading,
+      error: realTimePreview.error,
+      calculate: realTimePreview.calculatePreview,
+      reset: realTimePreview.reset,
+    },
+
+    // Actions
+    updateRealTimePreview,
+    refreshRoutePreview: routePreview.refetch,
+  };
+}
+
+/**
+ * Hook for territory preview statistics and quality metrics
+ */
+export function useTerritoryPreviewStats(preview: TerritoryPreview | null) {
+  return useMemo(() => {
+    if (!preview) {
+      return {
+        hasData: false,
+        isValid: false,
+        area: 0,
+        formattedArea: 'No data',
+        conflicts: 0,
+        majorConflicts: 0,
+        eligible: false,
+        quality: 'unknown' as const,
+        qualityScore: 0,
+      };
+    }
+
+    const area = preview.area_square_meters || 0;
+    const conflicts = preview.conflicts?.length || 0;
+    const majorConflicts = preview.conflicts?.filter(
+      c => c.conflict_type === 'major' || c.conflict_type === 'complete'
+    ).length || 0;
+
+    // Format area
+    let formattedArea: string;
+    if (area >= 1000000) {
+      formattedArea = `${(area / 1000000).toFixed(2)} km²`;
+    } else if (area >= 10000) {
+      formattedArea = `${(area / 10000).toFixed(2)} ha`;
+    } else {
+      formattedArea = `${area.toFixed(0)} m²`;
+    }
+
+    // Calculate quality score
+    let qualityScore = 0;
+    if (preview.is_valid) qualityScore += 40;
+    if (preview.eligible_for_claiming) qualityScore += 30;
+    if (area > 100) qualityScore += 20;
+    if (conflicts === 0) qualityScore += 10;
+    qualityScore = Math.max(0, qualityScore - majorConflicts * 20 - conflicts * 5);
+
+    // Determine quality level
+    let quality: 'poor' | 'fair' | 'good' | 'excellent';
+    if (qualityScore >= 80) quality = 'excellent';
+    else if (qualityScore >= 60) quality = 'good';
+    else if (qualityScore >= 40) quality = 'fair';
+    else quality = 'poor';
 
     return {
-      canClaim: !!preview.is_valid,
-      needsMorePoints: (preview.min_points_needed || 0) > 0,
-      needsClosure: typeof preview.closure_distance_m === 'number' && preview.closure_distance_m > 50,
-      hasGPSIssues: issues.length > 0,
-      claimingProbability: preview.claiming_probability,
-      estimatedArea: preview.area_km2,
-      routeLength: preview.perimeter_km,
-
-      // Enhanced status indicators
-      eligibilityIndicators: indicators,
-      closureGuidance: guidance,
-
-      // Detailed status checks
-      hasMinimumPoints: !!indicators.has_minimum_points,
-      isApproachingClosure: !!indicators.is_approaching_closure,
-      hasSufficientArea: !!indicators.has_sufficient_area,
-      gpsQualityAcceptable: !!indicators.gps_quality_acceptable,
-      routeComplexityGood: !!indicators.route_complexity_good,
-
-      // Closure guidance
-      distanceToStart: guidance.distance_to_start,
-      recommendedDirection: guidance.recommended_direction,
-      closureFeasible: !!guidance.closure_feasible,
-
-      // Performance info
-      calculationTime: preview.calculation_time_ms
+      hasData: true,
+      isValid: preview.is_valid,
+      area,
+      formattedArea,
+      conflicts,
+      majorConflicts,
+      eligible: preview.eligible_for_claiming,
+      quality,
+      qualityScore,
     };
-  })() : null;
-
-  return {
-    preview,
-    previewStatus,
-    loading,
-    error,
-    lastUpdated,
-    refresh,
-    hasPreview: preview !== null
-  };
-};
-
-// Hook for real-time territory preview updates
-export const useRealTimeTerritoryPreview = (routeId?: string) => {
-  const basePreview = useTerritoryPreview({ 
-    routeId, 
-    autoRefresh: true, 
-    refreshInterval: 15000 // Refresh every 15 seconds
-  });
-
-  const [realtimeUpdates, setRealtimeUpdates] = useState({
-    coordinateCount: 0,
-    lastCoordinateTime: null as Date | null,
-    isNearClosure: false
-  });
-
-  // Update preview when new coordinates are added
-  const updateFromCoordinate = useCallback((coordinate: any, totalCoordinates: number) => {
-    setRealtimeUpdates(prev => ({
-      ...prev,
-      coordinateCount: totalCoordinates,
-      lastCoordinateTime: new Date(),
-      isNearClosure: false // Will be updated by next preview fetch
-    }));
-
-    // Trigger preview refresh after coordinate addition
-    setTimeout(() => {
-      basePreview.refresh();
-    }, 1000);
-  }, [basePreview.refresh]);
-
-  // Check if route is approaching closure
-  useEffect(() => {
-    const closureDistance = basePreview.preview?.closure_distance_m;
-    if (typeof closureDistance === 'number') {
-      const isNear = closureDistance <= 100; // Within 100m
-      setRealtimeUpdates(prev => ({
-        ...prev,
-        isNearClosure: isNear
-      }));
-    } else {
-      setRealtimeUpdates(prev => ({
-        ...prev,
-        isNearClosure: false
-      }));
-    }
-  }, [basePreview.preview?.closure_distance_m]);
-
-  return {
-    ...basePreview,
-    realtimeUpdates,
-    updateFromCoordinate,
-    isApproachingClosure: realtimeUpdates.isNearClosure
-  };
-};
+  }, [preview]);
+}

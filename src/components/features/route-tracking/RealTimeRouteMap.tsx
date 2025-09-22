@@ -12,11 +12,13 @@ import type { RouteDetail } from '@/lib/api/types/routes';
 import type { Coordinate } from '@/lib/api/types/common';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { useTerritoryPreview } from '@/hooks/useApiQueries';
 
 interface RealTimeRouteMapProps {
     activeRoute: RouteDetail;
     currentLocation: GeolocationPosition | null;
     isTracking: boolean;
+    elapsedMs: number;
     className?: string;
     height?: string;
 }
@@ -38,20 +40,28 @@ export default function RealTimeRouteMap({
     activeRoute,
     currentLocation,
     isTracking,
+    elapsedMs,
     className = '',
     height = '400px'
 }: RealTimeRouteMapProps) {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [mapInstance, setMapInstance] = useState<any>(null);
 
+    // Fetch real-time territory preview
+    const { data: territoryPreview } = useTerritoryPreview({
+        routeId: activeRoute.id,
+        autoRefresh: true,
+        refreshInterval: 5000, // Refresh every 5 seconds
+    });
+
     // Calculate real-time statistics
     const stats = useMemo((): RouteStats => {
         const coordinates = activeRoute.coordinates;
         
-        if (coordinates.length < 2) {
+        if (coordinates.length < 1) { // Changed from < 2 to < 1 to allow stats with one point
             return {
                 distance: 0,
-                duration: 0,
+                duration: elapsedMs,
                 currentSpeed: currentLocation?.coords.speed ? currentLocation.coords.speed * 3.6 : 0,
                 averageSpeed: 0,
                 coordinateCount: coordinates.length,
@@ -71,10 +81,11 @@ export default function RealTimeRouteMap({
             );
         }
 
-        // Calculate duration from first to last coordinate
-        const startTime = new Date(coordinates[0].timestamp).getTime();
-        const endTime = new Date(coordinates[coordinates.length - 1].timestamp).getTime();
-        const duration = endTime - startTime;
+        // Use elapsedMs for duration if tracking, otherwise calculate from timestamps
+        const duration = isTracking ? elapsedMs : 
+            (coordinates.length > 1 ?
+            new Date(coordinates[coordinates.length - 1].timestamp).getTime() - new Date(coordinates[0].timestamp).getTime()
+            : 0);
 
         // Calculate average speed
         const averageSpeed = duration > 0 ? (totalDistance / (duration / 1000)) * 3.6 : 0;
@@ -97,7 +108,7 @@ export default function RealTimeRouteMap({
             gpsAccuracy: currentLocation?.coords.accuracy || 0,
             isClosedLoop
         };
-    }, [activeRoute.coordinates, currentLocation]);
+    }, [activeRoute.coordinates, currentLocation, elapsedMs, isTracking]);
 
     // Calculate map bounds and center
     const mapView = useMemo(() => {
@@ -185,7 +196,17 @@ export default function RealTimeRouteMap({
             <div className={cn("flex items-center justify-center bg-muted rounded-lg", className)} style={containerStyles}>
                 <div className="text-center">
                     <Activity className="w-12 h-12 text-primary mx-auto mb-4 animate-pulse" />
-                    <p className="text-muted-foreground">Waiting for GPS signal...</p>
+                    <p className="text-muted-foreground">
+                        {isTracking && activeRoute.coordinates.length === 0
+                            ? "Getting GPS signal..."
+                            : "No GPS data available"
+                        }
+                    </p>
+                    {isTracking && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                            Make sure location permissions are enabled
+                        </p>
+                    )}
                 </div>
             </div>
         );
@@ -311,6 +332,19 @@ export default function RealTimeRouteMap({
                                 }}
                             />
                         </>
+                    )}
+
+                    {/* Territory Preview Polygon */}
+                    {territoryPreview && (territoryPreview as any).boundary && (
+                        <Polyline
+                            positions={(territoryPreview as any).boundary.map((p: any) => [p.latitude, p.longitude])}
+                            pathOptions={{
+                                color: '#f59e0b', // A distinct color for the preview
+                                weight: 3,
+                                opacity: 0.7,
+                                dashArray: '5, 10'
+                            }}
+                        />
                     )}
 
                     {/* Start marker */}

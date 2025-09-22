@@ -2,33 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { GatewayAPI } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-
-// Create query keys utility inline to avoid import issues
-const queryKeys = {
-  activeRoute: (userId: string) => ['routes', 'active', userId],
-  routesForUser: (userId: string) => ['routes', 'user', userId],
-  route: (routeId: string, userId: string) => ['routes', routeId, userId],
-  userTerritories: (userId: string) => ['territories', 'user', userId],
-  territoriesMap: () => ['territories', 'map'],
-};
-
-// Create invalidation utility inline
-const invalidateQueries = {
-  routes: (queryClient: any, userId: string) => {
-    queryClient.invalidateQueries({ queryKey: ['routes'] });
-    queryClient.invalidateQueries({ queryKey: ['routes', 'user', userId] });
-  },
-  userProfile: (queryClient: any, userId: string) => {
-    queryClient.invalidateQueries({ queryKey: ['user', userId] });
-  },
-  territories: (queryClient: any, userId: string) => {
-    queryClient.invalidateQueries({ queryKey: ['territories'] });
-    queryClient.invalidateQueries({ queryKey: ['territories', 'user', userId] });
-  },
-  leaderboard: (queryClient: any) => {
-    queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
-  },
-};
+import { queryKeys, invalidateQueries } from '@/lib/query/query-client';
+import { RouteData } from '@/pages/Routes';
 
 // Optimistic route tracking mutations
 export const useOptimisticStartRoute = () => {
@@ -36,49 +11,20 @@ export const useOptimisticStartRoute = () => {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async (data: { name?: string; description?: string; start_coordinate?: any }) => {
-      if (!user?.id) throw new Error('User not authenticated');
-      
-      const result = await GatewayAPI.startRoute(user.id, data);
-      if (!result.ok) {
-        throw result;
-      }
-      return result.data;
+    mutationFn: (variables: { userId: string; name?: string; description?: string; start_coordinate?: any }) => GatewayAPI.startRoute(variables.userId, variables),
+    onMutate: async (newRoute: { userId: string; name?: string; description?: string; start_coordinate?: any }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.activeRoute(newRoute.userId) });
+
+      const previousActiveRoute = queryClient.getQueryData(queryKeys.activeRoute(newRoute.userId));
+      const previousRoutes = queryClient.getQueryData(queryKeys.routesForUser(newRoute.userId));
+
+      queryClient.setQueryData(queryKeys.activeRoute(newRoute.userId), (old: RouteData | undefined) => ({
+        ...old,
+        ...newRoute,
+      }));
+      return { previousActiveRoute, previousRoutes };
     },
-    onMutate: async (variables) => {
-      if (!user?.id) return;
-
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: queryKeys.activeRoute(user.id) });
-      await queryClient.cancelQueries({ queryKey: queryKeys.routesForUser(user.id) });
-
-      // Snapshot the previous values
-      const previousActiveRoute = queryClient.getQueryData(queryKeys.activeRoute(user.id));
-      const previousRoutes = queryClient.getQueryData(queryKeys.routesForUser(user.id));
-
-      // Optimistically update active route
-      const optimisticRoute = {
-        id: `temp-${Date.now()}`,
-        name: variables.name || 'New Route',
-        description: variables.description,
-        start_coordinate: variables.start_coordinate,
-        status: 'active',
-        user_id: user.id,
-        coordinates: [],
-        start_time: new Date().toISOString(),
-        distance: 0,
-        is_completed: false,
-        is_closed: false,
-      };
-
-      queryClient.setQueryData(queryKeys.activeRoute(user.id), optimisticRoute);
-
-      // Show optimistic feedback
-      toast.success('Starting route...', { duration: 2000 });
-
-      return { previousActiveRoute, previousRoutes, optimisticRoute };
-    },
-    onError: (err, variables, context) => {
+    onError: (_error, _variables, context) => {
       // Revert optimistic updates
       if (context && user?.id) {
         queryClient.setQueryData(queryKeys.activeRoute(user.id), context.previousActiveRoute);
@@ -150,7 +96,7 @@ export const useOptimisticAddCoordinates = () => {
 
       return { previousActiveRoute, previousRoute };
     },
-    onError: (err, variables, context) => {
+    onError: (_error, variables, context) => {
       // Revert optimistic updates
       if (context && user?.id) {
         queryClient.setQueryData(queryKeys.activeRoute(user.id), context.previousActiveRoute);
@@ -164,6 +110,9 @@ export const useOptimisticAddCoordinates = () => {
         queryClient.setQueryData(queryKeys.route(variables.routeId, user.id), data);
       }
     },
+    onSettled: (data, _error, variables) => {
+      invalidateQueries.activeRoute(queryClient, variables.routeId);
+    },
   });
 };
 
@@ -172,56 +121,41 @@ export const useOptimisticCompleteRoute = () => {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async (data: { 
-      routeId: string; 
-      completion: { end_coordinate?: any; force_completion?: boolean };
-    }) => {
-      if (!user?.id) throw new Error('User not authenticated');
-      
-      const result = await GatewayAPI.completeRoute(data.routeId, user.id, data.completion);
-      if (!result.ok) {
-        throw result;
-      }
-      return result.data;
-    },
-    onMutate: async (variables) => {
+    mutationFn: (variables) => GatewayAPI.completeRoute(variables.routeId, user?.id, variables.payload),
+    onMutate: async (routeCompletion: { routeId: string; payload: any }) => {
       if (!user?.id) return;
 
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: queryKeys.activeRoute(user.id) });
-      await queryClient.cancelQueries({ queryKey: queryKeys.route(variables.routeId, user.id) });
+      await queryClient.cancelQueries({ queryKey: queryKeys.routesForUser(user.id) });
 
-      // Snapshot the previous values
+      const previousRoutes = queryClient.getQueryData(queryKeys.routesForUser(user.id));
+
+      // Optimistically remove the active route
       const previousActiveRoute = queryClient.getQueryData(queryKeys.activeRoute(user.id));
-      const previousRoute = queryClient.getQueryData(queryKeys.route(variables.routeId, user.id));
-
-      // Optimistically update route as completed
-      if (previousActiveRoute && typeof previousActiveRoute === 'object') {
-        const route = previousActiveRoute as any;
-        const completedRoute = {
-          ...route,
-          status: 'completed',
-          is_completed: true,
-          end_time: new Date().toISOString(),
-          end_coordinate: variables.completion.end_coordinate,
-        };
-        
-        queryClient.setQueryData(queryKeys.route(variables.routeId, user.id), completedRoute);
-      }
-
-      // Clear active route
       queryClient.setQueryData(queryKeys.activeRoute(user.id), null);
+      
+      // Optimistically add the completed route to the list
+      const optimisticRoute = {
+        ...(previousActiveRoute as object),
+        id: `optimistic-${Date.now()}`,
+        status: 'completed',
+        name: routeCompletion.payload?.name || 'Unnamed Route',
+      };
 
-      // Show optimistic feedback
-      toast.success('Completing route...', { duration: 2000 });
-
-      return { previousActiveRoute, previousRoute };
+      if (previousRoutes) {
+        queryClient.setQueryData(queryKeys.routesForUser(user.id), (old: RouteData[] | undefined) => [
+          ...(old || []),
+          optimisticRoute as RouteData,
+        ]);
+      }
+      return { previousRoutes, previousActiveRoute };
     },
-    onError: (err, variables, context) => {
+    onError: (_error, variables, context) => {
       // Revert optimistic updates
       if (context && user?.id) {
         queryClient.setQueryData(queryKeys.activeRoute(user.id), context.previousActiveRoute);
-        queryClient.setQueryData(queryKeys.route(variables.routeId, user.id), context.previousRoute);
+        queryClient.setQueryData(queryKeys.routesForUser(user.id), context.previousRoutes);
       }
       
       toast.error('Failed to complete route. Please try again.');
@@ -237,6 +171,13 @@ export const useOptimisticCompleteRoute = () => {
       
       toast.success('Route completed successfully!');
     },
+    onSettled: (data, _error, variables) => {
+      invalidateQueries.routesForUser(queryClient, user?.id);
+      invalidateQueries.activeRoute(queryClient, user?.id);
+      invalidateQueries.userProfile(queryClient, user?.id);
+      invalidateQueries.territories(queryClient, user?.id);
+      invalidateQueries.leaderboard(queryClient);
+    },
   });
 };
 
@@ -245,65 +186,31 @@ export const useOptimisticClaimTerritory = () => {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async (data: { 
-      route_id: string; 
-      boundary_coordinates: Array<{ longitude: number; latitude: number }>; 
-      name?: string; 
-      description?: string;
-    }) => {
-      if (!user?.id) throw new Error('User not authenticated');
-      
-      const result = await GatewayAPI.claimTerritoryFromRoute(user.id, data);
-      if (!result.ok) {
-        throw result;
-      }
-      return result.data;
-    },
-    onMutate: async (variables) => {
+    mutationFn: (variables) => GatewayAPI.claimTerritoryFromRoute(user?.id, variables),
+    onMutate: async (claim: { route_id: string; boundary_coordinates: Array<{ longitude: number; latitude: number }>; name?: string; description?: string }) => {
       if (!user?.id) return;
 
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: queryKeys.userTerritories(user.id) });
+      await queryClient.cancelQueries({ queryKey: queryKeys.userTerritories(user?.id) });
       await queryClient.cancelQueries({ queryKey: queryKeys.territoriesMap() });
 
-      // Snapshot the previous values
-      const previousUserTerritories = queryClient.getQueryData(queryKeys.userTerritories(user.id));
+      const previousTerritories = queryClient.getQueryData(queryKeys.userTerritories(user?.id));
       const previousTerritoriesMap = queryClient.getQueryData(queryKeys.territoriesMap());
 
-      // Create optimistic territory
       const optimisticTerritory = {
-        id: `temp-${Date.now()}`,
-        owner_id: user.id,
-        owner_username: user.username,
-        name: variables.name || 'New Territory',
-        description: variables.description,
-        boundary: {
-          type: 'Polygon',
-          coordinates: [variables.boundary_coordinates.map(coord => [coord.longitude, coord.latitude])],
-        },
-        area: calculatePolygonArea(variables.boundary_coordinates),
-        status: 'claimed',
-        claimed_at: new Date().toISOString(),
-        route_id: variables.route_id,
+        id: `optimistic-territory-${Date.now()}`,
+        name: claim.name,
+        // ... other optimistic fields
       };
 
-      // Optimistically update user territories
-      if (previousUserTerritories && Array.isArray(previousUserTerritories)) {
-        queryClient.setQueryData(
-          queryKeys.userTerritories(user.id), 
-          [...previousUserTerritories, optimisticTerritory]
-        );
-      }
+      queryClient.setQueryData(queryKeys.userTerritories(user?.id), (old: { id: string }[] | undefined) => [...(old || []), optimisticTerritory]);
 
-      // Show optimistic feedback
-      toast.success('Claiming territory...', { duration: 2000 });
-
-      return { previousUserTerritories, previousTerritoriesMap, optimisticTerritory };
+      return { previousTerritories, previousTerritoriesMap };
     },
-    onError: (err, variables, context) => {
+    onError: (_error, variables, context) => {
       // Revert optimistic updates
       if (context && user?.id) {
-        queryClient.setQueryData(queryKeys.userTerritories(user.id), context.previousUserTerritories);
+        queryClient.setQueryData(queryKeys.userTerritories(user.id), context.previousTerritories);
         queryClient.setQueryData(queryKeys.territoriesMap(), context.previousTerritoriesMap);
       }
       
@@ -318,6 +225,11 @@ export const useOptimisticClaimTerritory = () => {
       }
       
       toast.success('Territory claimed successfully!');
+    },
+    onSettled: () => {
+      invalidateQueries.territories(queryClient, user!.id);
+      invalidateQueries.leaderboard(queryClient);
+      invalidateQueries.userProfile(queryClient, user!.id);
     },
   });
 };

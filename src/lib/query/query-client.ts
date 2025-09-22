@@ -131,7 +131,7 @@ export const queryKeys = {
   achievementProgress: (userId: string, achievementId: string) => ['users', 'achievements', 'progress', userId, achievementId] as const,
   
   // Routes
-  routesForUser: (userId: string, limit?: number) => ['routes', 'user', userId, { limit }] as const,
+  routesForUser: (userId: string, limit?: number, status?: string) => ['routes', 'user', userId, { limit, status }] as const,
   activeRoute: (userId: string) => ['routes', 'active', userId] as const,
   route: (routeId: string, userId: string) => ['routes', 'detail', routeId, userId] as const,
   routeStatistics: (routeId: string, userId: string) => ['routes', 'statistics', routeId, userId] as const,
@@ -142,6 +142,11 @@ export const queryKeys = {
   territory: (territoryId: string) => ['territories', 'detail', territoryId] as const,
   contestedTerritories: () => ['territories', 'contested'] as const,
   nearbyTerritories: (lat: number, lng: number, radius: number) => ['territories', 'nearby', lat, lng, radius] as const,
+  territoryPreview: (coordinates: Array<{ longitude: number; latitude: number }>) => ['territories', 'preview', coordinates] as const,
+  territoryStatistics: (userId: string) => ['territories', 'statistics', userId] as const,
+  globalTerritoryStatistics: () => ['territories', 'statistics', 'global'] as const,
+  territoryLeaderboard: (metric: string, limit: number, offset: number) => ['territories', 'leaderboard', metric, limit, offset] as const,
+  territoryValidation: (routeId: string) => ['territories', 'validation', routeId] as const,
   
   // Leaderboard
   leaderboard: (category: string, period: string, start: number, limit: number) => 
@@ -156,24 +161,44 @@ export const invalidateQueries = {
     queryClient.invalidateQueries({ queryKey: queryKeys.userStatistics(userId) });
     queryClient.invalidateQueries({ queryKey: queryKeys.userAchievements(userId) });
   },
-  
+
   routes: (queryClient: QueryClient, userId: string) => {
     queryClient.invalidateQueries({ queryKey: ['routes'] });
     queryClient.invalidateQueries({ queryKey: queryKeys.routesForUser(userId) });
     queryClient.invalidateQueries({ queryKey: queryKeys.activeRoute(userId) });
   },
-  
+
+  routesForUser: (queryClient: QueryClient, userId: string) => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.routesForUser(userId) });
+  },
+
+  activeRoute: (queryClient: QueryClient, userId: string) => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.activeRoute(userId) });
+  },
+
   territories: (queryClient: QueryClient, userId?: string) => {
     queryClient.invalidateQueries({ queryKey: ['territories'] });
     if (userId) {
       queryClient.invalidateQueries({ queryKey: queryKeys.userTerritories(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.territoryStatistics(userId) });
     }
   },
-  
+
+  territoryStatistics: (queryClient: QueryClient, userId?: string) => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.globalTerritoryStatistics() });
+    if (userId) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.territoryStatistics(userId) });
+    }
+  },
+
+  territoryLeaderboard: (queryClient: QueryClient) => {
+    queryClient.invalidateQueries({ queryKey: ['territories', 'leaderboard'] });
+  },
+
   leaderboard: (queryClient: QueryClient) => {
     queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
   },
-  
+
   all: (queryClient: QueryClient) => {
     queryClient.invalidateQueries();
   },

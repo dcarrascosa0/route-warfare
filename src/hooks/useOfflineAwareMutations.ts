@@ -134,6 +134,7 @@ export const useOfflineAwareCompleteRoute = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { isOnline, addOfflineOperation } = useOfflineSync();
+  const { smartInvalidateAfterRouteComplete } = useDataInvalidationStrategies();
 
   return useMutation({
     mutationFn: async (data: { 
@@ -178,21 +179,11 @@ export const useOfflineAwareCompleteRoute = () => {
       }
       return result.data;
     },
-    onSuccess: (data, variables) => {
-      if (user?.id) {
-        if (isOnline) {
-          queryClient.setQueryData(queryKeys.route(variables.routeId, user.id), data);
-          invalidateQueries.routes(queryClient, user.id);
-          invalidateQueries.userProfile(queryClient, user.id);
-          invalidateQueries.territories(queryClient, user.id);
-          toast.success('Route completed successfully!');
-        } else {
-          toast.info('Route completion queued - will sync when online');
-        }
-      }
+    onSuccess: () => {
+      smartInvalidateAfterRouteComplete();
     },
-    onError: (error) => {
-      toast.error('Failed to complete route. Please try again.');
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to complete route. Your route is saved offline.");
     },
   });
 };
@@ -201,6 +192,7 @@ export const useOfflineAwareClaimTerritory = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { isOnline, addOfflineOperation } = useOfflineSync();
+  const { smartInvalidateAfterTerritoryChange } = useDataInvalidationStrategies();
 
   return useMutation({
     mutationFn: async (data: { 
@@ -255,20 +247,18 @@ export const useOfflineAwareClaimTerritory = () => {
       }
       return result.data;
     },
-    onSuccess: (data, variables) => {
-      if (user?.id) {
-        if (isOnline) {
-          invalidateQueries.territories(queryClient, user.id);
-          invalidateQueries.userProfile(queryClient, user.id);
-          invalidateQueries.leaderboard(queryClient);
-          toast.success('Territory claimed successfully!');
-        } else {
-          toast.info('Territory claim queued - will sync when online');
-        }
-      }
+    onSuccess: () => {
+      smartInvalidateAfterTerritoryChange();
+      toast.success("Territory claimed successfully!");
     },
-    onError: (error) => {
-      toast.error('Failed to claim territory. Please try again.');
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to claim territory. Please try again later.");
+    },
+    onSettled: () => {
+      // Invalidate relevant queries regardless of outcome
+      invalidateQueries.territories(queryClient, user.id);
+      invalidateQueries.userProfile(queryClient, user.id);
+      invalidateQueries.leaderboard(queryClient);
     },
   });
 };

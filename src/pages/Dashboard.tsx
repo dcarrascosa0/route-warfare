@@ -1,6 +1,6 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
-import { GatewayAPI } from '@/lib/api';
+import { GatewayAPI, type ApiResult, type UserStatistics, type Territory } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,174 +19,45 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { UserStats } from '@/components/features/user-profile';
-import type { UserProfile, UserStatistics, UserAchievement } from '@/lib/api/types';
-
-interface DashboardData {
-  user: UserProfile;
-  statistics: UserStatistics;
-  achievements: UserAchievement[];
-}
-
-interface Territory {
-  id: string;
-  name: string;
-  area: number;
-  status: 'claimed' | 'contested' | 'neutral';
-  claimed_at: string;
-}
-
-interface RecentActivity {
-  id: string;
-  type: 'route_completed' | 'territory_claimed' | 'achievement_unlocked';
-  description: string;
-  timestamp: string;
-  data?: any;
-}
+import { queryKeys } from '@/lib/query';
 
 const Dashboard = () => {
   const { user, isAuthenticated } = useAuth();
 
   // Fetch user profile and statistics (with graceful fallback)
   const { data: profile, isLoading: profileLoading, error: profileError } = useQuery({
-    queryKey: ['user', 'profile', user?.id],
-    queryFn: async (): Promise<DashboardData> => {
-      if (!user?.id) {
-        return {
-          user: {
-            id: user?.id || '',
-            email: user?.email || '',
-            username: user?.username || '',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          statistics: {
-            total_routes: 0,
-            total_distance_km: 0,
-            total_duration_hours: 0,
-            total_territories: 0,
-            total_territory_area_km2: 0,
-            average_speed_kmh: 0,
-            completion_rate: 0,
-            rank: 0,
-          },
-          achievements: [],
-        };
-      }
+    queryKey: queryKeys.userProfile(user!.id),
+    queryFn: () => GatewayAPI.userProfile(user!.id),
+    enabled: !!user,
+  });
 
-      try {
-        // Fetch profile, statistics, and achievements separately
-        const [profileRes, statsRes, achievementsRes] = await Promise.allSettled([
-          GatewayAPI.userProfile(user.id),
-          GatewayAPI.userStatistics(user.id),
-          GatewayAPI.userAchievements(user.id),
-        ]);
-
-        const userProfile = profileRes.status === 'fulfilled' && profileRes.value.ok
-          ? profileRes.value.data as UserProfile
-          : {
-            id: user.id,
-            email: user.email || '',
-            username: user.username || '',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-
-        const statistics = statsRes.status === 'fulfilled' && statsRes.value.ok
-          ? statsRes.value.data as UserStatistics
-          : {
-            total_routes: 0,
-            total_distance_km: 0,
-            total_duration_hours: 0,
-            total_territories: 0,
-            total_territory_area_km2: 0,
-            average_speed_kmh: 0,
-            completion_rate: 0,
-            rank: 0,
-          };
-
-        const achievements = achievementsRes.status === 'fulfilled' && achievementsRes.value.ok
-          ? achievementsRes.value.data as UserAchievement[]
-          : [];
-
-        return {
-          user: userProfile,
-          statistics,
-          achievements,
-        };
-      } catch (error) {
-        console.warn('Dashboard profile API unavailable, using fallback data');
-        return {
-          user: {
-            id: user.id,
-            email: user.email || '',
-            username: user.username || '',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          statistics: {
-            total_routes: 0,
-            total_distance_km: 0,
-            total_duration_hours: 0,
-            total_territories: 0,
-            total_territory_area_km2: 0,
-            average_speed_kmh: 0,
-            completion_rate: 0,
-            rank: 0,
-          },
-          achievements: [],
-        };
-      }
-    },
-    enabled: !!user?.id,
-    retry: false,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+  const { data: statistics, isLoading: statsLoading } = useQuery<ApiResult<UserStatistics>, ApiResult<unknown>, UserStatistics | undefined>({
+    queryKey: queryKeys.userStatistics(user!.id),
+    queryFn: () => GatewayAPI.userStatistics(user!.id),
+    enabled: !!user,
+    select: (res) => (res.ok ? res.data : undefined),
   });
 
   // Fetch user territories (with graceful fallback)
-  const { data: territories, isLoading: territoriesLoading } = useQuery({
-    queryKey: ['territories', 'user', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-
-      try {
-        const response = await GatewayAPI.getUserTerritories(user.id);
-        if (!response.ok) return []; // Return empty array on failure
-        return (response.data as any)?.territories || response.data || [];
-      } catch (error) {
-        console.warn('Dashboard territories API unavailable, using empty data');
-        return [];
-      }
-    },
-    enabled: !!user?.id,
-    retry: false,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+  const { data: territories, isLoading: territoriesLoading } = useQuery<ApiResult<Territory[]>, ApiResult<unknown>, Territory[]>({
+    queryKey: queryKeys.userTerritories(user!.id),
+    queryFn: () => GatewayAPI.getUserTerritories(user!.id),
+    enabled: !!user,
+    select: (res) => (res.ok && res.data ? res.data : []),
   });
 
   // Fetch active route (with graceful fallback)
-  const { data: activeRoute, isLoading: routeLoading } = useQuery({
-    queryKey: ['route', 'active', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
-
-      try {
-        const response = await GatewayAPI.getActiveRoute(user.id);
-        if (!response.ok) return null;
-        return response.data;
-      } catch (error) {
-        console.warn('Dashboard active route API unavailable');
-        return null;
-      }
-    },
-    enabled: !!user?.id,
-    retry: false,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+  const { data: activeRoute } = useQuery({
+    queryKey: queryKeys.activeRoute(user!.id),
+    queryFn: () => GatewayAPI.getActiveRoute(user!.id),
+    enabled: !!user,
+    refetchInterval: 30000, // Poll for active route changes
   });
 
+  const isLoading = profileLoading || statsLoading;
+
   // Mock recent activity for now (would come from notification service)
-  const recentActivity: RecentActivity[] = [
+  const recentActivity: any[] = [
     {
       id: '1',
       type: 'route_completed',
@@ -202,8 +73,9 @@ const Dashboard = () => {
     {
       id: '3',
       type: 'achievement_unlocked',
-      description: 'Unlocked "Explorer" achievement',
-      timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      description: 'Unlocked "First Steps" achievement',
+      timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+      data: { achievementName: 'First Steps' }
     },
   ];
 
@@ -284,15 +156,15 @@ const Dashboard = () => {
               <MapPin className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              {profileLoading ? (
+              {isLoading ? (
                 <Skeleton className="h-8 w-20" />
               ) : (
                 <>
                   <div className="text-2xl font-bold">
-                    {profile?.statistics.total_territory_area_km2?.toFixed(2) || '0'} km²
+                    {statistics?.total_territory_area_km2?.toFixed(2) || '0'} km²
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {profile?.statistics.total_territories || 0} zones claimed
+                    {statistics?.total_territories || 0} zones claimed
                   </p>
                 </>
               )}
@@ -305,15 +177,15 @@ const Dashboard = () => {
               <Route className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              {profileLoading ? (
+              {isLoading ? (
                 <Skeleton className="h-8 w-20" />
               ) : (
                 <>
                   <div className="text-2xl font-bold">
-                    {profile?.statistics.total_routes || 0}
+                    {statistics?.total_routes || 0}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {((profile?.statistics.completion_rate || 0) * 100).toFixed(1)}% success rate
+                    {((statistics?.completion_rate || 0) * 100).toFixed(1)}% success rate
                   </p>
                 </>
               )}
@@ -326,15 +198,15 @@ const Dashboard = () => {
               <Trophy className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              {profileLoading ? (
+              {isLoading ? (
                 <Skeleton className="h-8 w-20" />
               ) : (
                 <>
                   <div className="text-2xl font-bold">
-                    #{profile?.statistics.rank || 'N/A'}
+                    #{statistics?.rank || 'N/A'}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {profile?.statistics.total_distance_km?.toFixed(1) || 0} km total
+                    {statistics?.total_distance_km?.toFixed(1) || 0} km total
                   </p>
                 </>
               )}
@@ -347,12 +219,12 @@ const Dashboard = () => {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              {profileLoading ? (
+              {isLoading ? (
                 <Skeleton className="h-8 w-20" />
               ) : (
                 <>
                   <div className="text-2xl font-bold">
-                    {profile?.statistics.average_speed_kmh?.toFixed(1) || 0} km/h
+                    {statistics?.average_speed_kmh?.toFixed(1) || 0} km/h
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Keep exploring!
@@ -372,15 +244,16 @@ const Dashboard = () => {
                 <CardTitle>Performance Statistics</CardTitle>
               </CardHeader>
               <CardContent>
-                {profile ? (
+                {statistics ? (
                   <UserStats statistics={{
-                    total_territory_area: profile.statistics.total_territory_area_km2,
-                    total_zones: profile.statistics.total_territories,
-                    routes_completed: profile.statistics.total_routes,
-                    win_rate: profile.statistics.completion_rate,
-                    current_rank: profile.statistics.rank || 0,
-                    level: Math.floor((profile.statistics.total_routes || 0) / 10) + 1, // Calculate level based on routes
-                    experience: (profile.statistics.total_routes || 0) * 100 + (profile.statistics.total_territory_area_km2 || 0) * 50, // Calculate XP
+                    ...statistics,
+                    total_territory_area: statistics.total_territory_area_km2,
+                    total_zones: statistics.total_territories,
+                    routes_completed: statistics.total_routes,
+                    win_rate: statistics.completion_rate,
+                    current_rank: statistics.rank || 0,
+                    level: Math.floor((statistics.total_routes || 0) / 10) + 1, // Calculate level based on routes
+                    experience: (statistics.total_routes || 0) * 100 + (statistics.total_territory_area_km2 || 0) * 50, // Calculate XP
                   }} />
                 ) : (
                   <div className="space-y-4">
@@ -454,7 +327,7 @@ const Dashboard = () => {
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {territory.area.toFixed(2)} km²
+                      {territory.area_km2.toFixed(2)} km²
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Claimed {new Date(territory.claimed_at).toLocaleDateString()}

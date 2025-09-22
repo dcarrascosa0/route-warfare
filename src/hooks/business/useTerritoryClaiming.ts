@@ -27,72 +27,42 @@ export default function useTerritoryClaiming({
   onClaimSuccess,
   onClaimError
 }: UseTerritoryclaimingProps = {}) {
-  const [claimState, setClaimState] = useState<TerritoryClaimState>({
+  const [state, setState] = useState<TerritoryClaimState>({
     isProcessing: false,
     result: null,
-    error: null
+    error: null,
   });
 
-  const claimTerritory = useCallback(async (
-    routeId: string,
-    boundaryCoordinates: Array<{ longitude: number; latitude: number }>,
-    options?: { name?: string; description?: string }
-  ) => {
+  const claimWithRoute = useCallback(async (routeId: string) => {
     if (!userId) {
-      const error = 'User ID is required for territory claiming';
-      setClaimState(prev => ({ ...prev, error }));
-      onClaimError?.(error);
-      return null;
+      const errorMsg = 'User ID is not available. Cannot claim territory.';
+      setState({ isProcessing: false, result: null, error: errorMsg });
+      onClaimError?.(errorMsg);
+      return;
     }
 
-    setClaimState(prev => ({ 
-      ...prev, 
-      isProcessing: true, 
-      error: null, 
-      result: null 
-    }));
+    setState({ isProcessing: true, result: null, error: null });
 
     try {
-      const response = await GatewayAPI.claimTerritoryFromRoute(userId, {
+      const response = await GatewayAPI.claimTerritoryFromRoute({
         route_id: routeId,
-        boundary_coordinates: boundaryCoordinates,
-        name: options?.name,
-        description: options?.description,
+        user_id: userId,
+        name: `Territory from route ${routeId.substring(0, 8)}`,
       });
-      
+
       if (response.ok && response.data) {
-        const result = response.data as TerritoryClaimResult;
-        setClaimState(prev => ({ 
-          ...prev, 
-          isProcessing: false, 
-          result,
-          error: null 
-        }));
+        const result: TerritoryClaimResult = response.data;
+        setState({ isProcessing: false, result, error: null });
         onClaimSuccess?.(result);
-        return result;
       } else {
-        const errorMessage = typeof (response as any).error === 'string'
-          ? (response as any).error
-          : (typeof (response as any).error?.message === 'string'
-              ? (response as any).error.message
-              : 'Failed to claim territory');
-        setClaimState(prev => ({ 
-          ...prev, 
-          isProcessing: false, 
-          error: errorMessage 
-        }));
-        onClaimError?.(errorMessage);
-        return null;
+        const errorMsg = response.error || 'Failed to claim territory.';
+        setState({ isProcessing: false, result: null, error: errorMsg });
+        onClaimError?.(errorMsg);
       }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      setClaimState(prev => ({ 
-        ...prev, 
-        isProcessing: false, 
-        error: errorMessage 
-      }));
-      onClaimError?.(errorMessage);
-      return null;
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'An unknown error occurred.';
+      setState({ isProcessing: false, result: null, error: errorMsg });
+      onClaimError?.(errorMsg);
     }
   }, [userId, onClaimSuccess, onClaimError]);
 
@@ -137,17 +107,12 @@ export default function useTerritoryClaiming({
   }, []);
 
   const resetClaimState = useCallback(() => {
-    setClaimState({
+    setState({
       isProcessing: false,
       result: null,
       error: null
     });
   }, []);
 
-  return {
-    claimState,
-    claimTerritory,
-    checkEligibility,
-    resetClaimState
-  };
+  return { ...state, claimWithRoute };
 }

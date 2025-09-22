@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, X, Check, CheckCheck, Trash2, Filter, Search, Settings } from 'lucide-react';
+import { Bell, X, Check, CheckCheck, Trash2, Filter, Search, Settings, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 import { useNotifications, Notification } from '@/contexts/NotificationContext';
 
 interface NotificationCenterProps {
@@ -22,6 +22,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
     clearNotifications,
     isConnected,
     connectionError,
+    connectionHealth,
   } = useNotifications();
   
   const [filter, setFilter] = useState<FilterType>('all');
@@ -151,14 +152,23 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
         </div>
         
         {/* Connection Status */}
-        {!isConnected && (
-          <div className="p-3 bg-yellow-50 border-b border-yellow-200">
-            <div className="flex items-center gap-2 text-yellow-800 text-sm">
-              <div className="w-2 h-2 bg-yellow-500 rounded-full" />
-              {connectionError ? 'Connection error' : 'Connecting...'}
-            </div>
+        <div className="p-3 bg-gray-50 border-b border-gray-200">
+          <div className="flex items-center gap-2 text-gray-600 text-sm">
+            {isConnected ? (
+              <>
+                <Wifi className={`w-4 h-4 ${connectionHealth === 'good' ? 'text-green-500' : 'text-yellow-500'}`} />
+                <span>
+                  Connection: <span className="font-semibold">{connectionHealth}</span>
+                </span>
+              </>
+            ) : (
+              <>
+                <WifiOff className="w-4 h-4 text-red-500" />
+                <span>{connectionError ? 'Connection error' : 'Disconnected'}</span>
+              </>
+            )}
           </div>
-        )}
+        </div>
         
         {/* Controls */}
         <div className="p-4 border-b space-y-3">

@@ -3,12 +3,13 @@ import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Trophy, Crown, Medal, MapPin, Route, Target, Users, Calendar, BarChart3, RefreshCw, Filter, Search } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { Trophy, MapPin, Route, Target, Users, Calendar, BarChart3, RefreshCw, Search } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GatewayAPI } from "../lib/api";
 import { LeaderboardEntry } from "../components/features/user-profile/LeaderboardEntry";
 import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { useWebSocketManager } from "../hooks/useWebSocketManager";
 
 type LeaderboardCategory = "territory" | "routes" | "winrate";
 type LeaderboardPeriod = "ALL_TIME" | "WEEKLY" | "MONTHLY";
@@ -39,12 +40,24 @@ const Leaderboard = () => {
   const [pageSize, setPageSize] = useState(20);
   const [currentPage, setCurrentPage] = useState(0);
 
+  const queryClient = useQueryClient();
+  const { onMessage } = useWebSocketManager({ autoConnect: true });
+
   const userId = useMemo(() => localStorage.getItem("user_id"), []);
   const isAuthenticated = !!userId;
 
   useEffect(() => {
     document.title = "Leaderboard - Route Wars";
   }, []);
+
+  // Real-time updates
+  useEffect(() => {
+    const cleanup = onMessage('leaderboard_updated', () => {
+      queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+      queryClient.invalidateQueries({ queryKey: ["leaderboard-stats"] });
+    });
+    return cleanup;
+  }, [onMessage, queryClient]);
 
   // Fetch leaderboard data based on selected category
   const { data: apiData, isLoading, error, refetch } = useQuery({

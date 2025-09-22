@@ -1,5 +1,12 @@
-import { useContext } from 'react';
-import { NotificationContextType } from '@/contexts/NotificationContext';
+import { Notification as CustomNotification, NotificationContextType } from "@/contexts/NotificationContext";
+
+// Export the types for external use
+export type { Notification, WebSocketMessage, NotificationContextType } from "@/contexts/NotificationContext";
+
+/**
+ * @deprecated This hook is deprecated. Use `useWebSocketManager` for WebSocket logic instead.
+ */
+module.exports = {};
 
 /**
  * Hook for subscribing to real-time game events via WebSocket notifications.
@@ -25,28 +32,28 @@ export const useNotifications = (): NotificationContextType => {
  * @returns Notification context with connection state and actions
  */
 export const useNotificationHandlers = (handlers: {
-  onNotification?: (notification: any) => void;
-  onTerritoryUpdate?: (data: any) => void;
-  onRouteComplete?: (data: any) => void;
-  onAchievementUnlocked?: (data: any) => void;
+  onNotification?: (notification: Notification) => void;
+  onTerritoryUpdate?: (data: { [key: string]: string | number | boolean }) => void;
+  onRouteComplete?: (data: { [key: string]: string | number | boolean }) => void;
+  onAchievementUnlocked?: (data: { [key: string]: string | number | boolean }) => void;
 }) => {
-  const notifications = useNotifications();
+  const ws = useNotifications();
   
   // Set up handlers if provided
   if (handlers.onNotification) {
-    notifications.onNotification = handlers.onNotification;
+    ws.onNotification = handlers.onNotification as unknown as (notification: CustomNotification) => void;
   }
   if (handlers.onTerritoryUpdate) {
-    notifications.onTerritoryUpdate = handlers.onTerritoryUpdate;
+    ws.onTerritoryUpdate = handlers.onTerritoryUpdate;
   }
   if (handlers.onRouteComplete) {
-    notifications.onRouteComplete = handlers.onRouteComplete;
+    ws.onRouteComplete = handlers.onRouteComplete;
   }
   if (handlers.onAchievementUnlocked) {
-    notifications.onAchievementUnlocked = handlers.onAchievementUnlocked;
+    ws.onAchievementUnlocked = handlers.onAchievementUnlocked;
   }
   
-  return notifications;
+  return ws;
 };
 
 /**

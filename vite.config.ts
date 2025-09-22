@@ -36,6 +36,10 @@ export default defineConfig(({ mode }) => ({
     minify: mode === 'production' ? 'terser' : false,
     sourcemap: mode === 'development',
     rollupOptions: {
+      input: {
+        app: 'index.html',
+        sw: 'src/sw.ts'
+      },
       output: {
         manualChunks: {
           // Core React libraries
@@ -72,7 +76,12 @@ export default defineConfig(({ mode }) => ({
           return `assets/${facadeModuleId}-[hash].js`;
         },
         assetFileNames: 'assets/[name]-[hash].[ext]',
-        entryFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: (assetInfo) => {
+          if (assetInfo.name === 'sw') {
+            return 'sw.js';
+          }
+          return `assets/[name]-[hash].js`;
+        },
       },
       external: mode === 'production' ? [] : undefined,
     },
@@ -88,7 +97,8 @@ export default defineConfig(({ mode }) => ({
       '@tanstack/react-query',
       '@tanstack/react-query-devtools',
       'leaflet',
-      'react-leaflet'
+      'react-leaflet',
+      'framer-motion'
     ]
   },
   define: {

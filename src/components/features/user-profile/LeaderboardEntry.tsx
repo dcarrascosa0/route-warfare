@@ -2,8 +2,18 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Crown, Trophy, Medal, TrendingUp, TrendingDown, Minus, User, MapPin, Route, Target, Zap } from "lucide-react";
+import {
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Trophy,
+  Crown,
+  Medal,
+  User,
+  Route,
+  Target,
+  MapPin,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface LeaderboardPlayer {

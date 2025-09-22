@@ -114,14 +114,9 @@ const RouteMapModal: React.FC<RouteMapModalProps> = ({
   const [showLayers, setShowLayers] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Do not render when modal is closed or route data is not provided
-  if (!isOpen || !route) {
-    return null;
-  }
-
   // Calculate route statistics
   const routeStats = useMemo(() => {
-    if (coordinates.length < 2) {
+    if (!isOpen || !route || coordinates.length < 2) {
       return {
         totalDistance: 0,
         duration: 0,
@@ -198,7 +193,7 @@ const RouteMapModal: React.FC<RouteMapModalProps> = ({
       elevationGain,
       isClosedLoop
     };
-  }, [coordinates]);
+  }, [coordinates, isOpen, route]);
 
   // Convert coordinates to Leaflet format
   const routePath = useMemo(() => {
@@ -238,6 +233,11 @@ const RouteMapModal: React.FC<RouteMapModalProps> = ({
       mapRef.current.fitBounds(bounds, { padding: [20, 20] });
     }
   }, [routePath, coordinates.length]);
+
+  // Do not render when modal is closed or route data is not provided
+  if (!isOpen || !route) {
+    return null;
+  }
 
   // Format functions
   const formatDistance = (meters: number) => {

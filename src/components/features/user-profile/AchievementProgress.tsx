@@ -17,7 +17,8 @@ import {
   Clock,
   Users,
   TrendingUp,
-  Calendar
+  Calendar,
+  Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Achievement, AchievementProgressProps } from './types';
@@ -33,18 +34,13 @@ interface AchievementCategory {
 }
 
 // Icon mapping
-const iconMap = {
-  trophy: Trophy,
-  map: MapPin,
-  route: Route,
-  target: Target,
-  zap: Zap,
-  star: Star,
+const iconMap: { [key: string]: React.ElementType } = {
   award: Award,
-  clock: Clock,
-  users: Users,
-  trending: TrendingUp,
-  calendar: Calendar,
+  star: Star,
+  trophy: Trophy,
+  shield: Shield,
+  zap: Zap,
+  target: Target,
 };
 
 // Rarity colors and styles
@@ -78,9 +74,8 @@ const rarityStyles = {
 const AchievementProgress: React.FC<AchievementProgressProps> = ({
   achievements,
   className,
-  showUnlocked = true,
-  showProgress = true,
 }) => {
+
   // Sample achievements if none provided
   const sampleAchievements: Achievement[] = [
     {
@@ -230,9 +225,8 @@ const AchievementProgress: React.FC<AchievementProgressProps> = ({
     return 'common';
   };
 
-  const AchievementCard: React.FC<{ achievement: Achievement; showDetails?: boolean }> = ({
+  const AchievementCard: React.FC<{ achievement: Achievement }> = ({
     achievement,
-    showDetails = false
   }) => {
     const IconComponent = iconMap[achievement.icon as keyof typeof iconMap] || Award;
     const isUnlocked = !!achievement.unlocked_at;
@@ -295,7 +289,7 @@ const AchievementProgress: React.FC<AchievementProgressProps> = ({
             </p>
 
             {/* Progress Bar */}
-            {hasProgress && showProgress && achievement.progress && (
+            {hasProgress && (
               <div className="space-y-1">
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Progress</span>
@@ -401,7 +395,7 @@ const AchievementProgress: React.FC<AchievementProgressProps> = ({
           <TabsContent key={category.id} value={category.id} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {category.achievements.map((achievement) => (
-                <AchievementCard key={achievement.id} achievement={achievement} showDetails />
+                <AchievementCard key={achievement.id} achievement={achievement} />
               ))}
             </div>
           </TabsContent>

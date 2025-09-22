@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 export interface ApiError extends Error {
   status?: number;
   code?: string;
-  details?: any;
+  details?: { [key: string]: string | number | boolean };
 }
 
 export const useErrorHandler = () => {

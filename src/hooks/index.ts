@@ -16,3 +16,4 @@ export * from './useNotifications';
 export * from './useNetworkStatus';
 export * from './useRouteTracker';
 export * from './useTerritoryUpdates';
+export * from './useTerritory';

@@ -46,7 +46,7 @@ export function normalizeRouteSummary(route: any) {
     status: route.status,
     created_at: route.created_at,
     updated_at: route.updated_at,
-    completed_at: route.end_time ?? null,
+    completed_at: route.completed_at ?? null,
     stats: normalizeStats(route.stats),
   };
 }

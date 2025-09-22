@@ -21,6 +21,7 @@ export interface WebSocketHookState {
   isConnecting: boolean;
   lastMessage: WebSocketMessage | null;
   stats: any;
+  health: 'good' | 'ok' | 'poor';
 }
 
 export const useWebSocketManager = (options: UseWebSocketManagerOptions = {}) => {
@@ -37,7 +38,8 @@ export const useWebSocketManager = (options: UseWebSocketManagerOptions = {}) =>
     isConnected: false,
     isConnecting: false,
     lastMessage: null,
-    stats: {}
+    stats: {},
+    health: 'poor'
   });
 
   // Message handlers
@@ -52,9 +54,9 @@ export const useWebSocketManager = (options: UseWebSocketManagerOptions = {}) =>
     }
 
     const wsUrl = process.env.NODE_ENV === 'production'
-      ? 'wss://api.routewars.com/notifications'
-      : 'ws://localhost:8006/notifications';
-
+      ? `wss://api.routewars.com/api/v1/notifications/ws/${user.id}`
+      : `ws://localhost:8000/api/v1/notifications/ws/${user.id}`;
+    
     wsManagerRef.current = createWebSocketManager({
       url: wsUrl,
       token,
@@ -64,61 +66,92 @@ export const useWebSocketManager = (options: UseWebSocketManagerOptions = {}) =>
     const wsManager = wsManagerRef.current;
 
     // Set up event listeners
-    const updateState = () => {
-      const state = wsManager.getState();
+    const onStateChange = (newState: ConnectionState) => {
+      let health: 'good' | 'ok' | 'poor' = 'poor';
+      if (newState.isConnected) {
+        if ((newState.latency || 0) < 200) {
+          health = 'good';
+        } else {
+          health = 'ok';
+        }
+      }
+
       setState(prevState => ({
         ...prevState,
-        connectionState: state,
-        isConnected: state.isConnected,
-        isConnecting: state.isConnecting,
+        connectionState: newState,
+        isConnected: newState.isConnected,
+        isConnecting: newState.isConnecting,
         stats: {
-          reconnectAttempts: state.reconnectAttempts,
-          connectionDuration: state.connectionDuration,
-          totalReconnects: state.totalReconnects
-        }
+          reconnectAttempts: newState.reconnectAttempts,
+          connectionDuration: newState.connectionDuration,
+          totalReconnects: newState.totalReconnects,
+          latency: newState.latency
+        },
+        health
       }));
     };
 
-    // TODO: Add event listeners when WebSocketManager is fully implemented
-    // For now, just update state periodically
-    const interval = setInterval(updateState, 1000);
+    const onMessage = (message: WebSocketMessage) => {
+        setState(prevState => ({ ...prevState, lastMessage: message }));
+        const handler = messageHandlers.get(message.type);
+        if (handler) {
+            handler(message);
+        }
+    };
+    
+    wsManager.on('statechange', onStateChange);
+    wsManager.on('message', onMessage);
 
-    // Initial state update
-    updateState();
-
+    if (options.autoConnect) {
+        wsManager.connect();
+    }
+    
     return () => {
-      clearInterval(interval);
+      wsManager.removeListener('statechange', onStateChange);
+      wsManager.removeListener('message', onMessage);
       wsManager.disconnect();
     };
-  }, [user, options.subscribeToEvents, options.watchTerritories, options.watchRoutes]);
+  }, [user, options.autoConnect]);
 
   // Send message
   const sendMessage = useCallback((message: WebSocketMessage) => {
     wsManagerRef.current?.send(message);
   }, []);
 
-  // Subscribe to events (placeholder)
+  // Subscribe to events
   const subscribeToEvents = useCallback((
     eventTypes: string[],
     territoryIds?: string[],
     routeIds?: string[]
   ) => {
-    console.log('Subscribe to events:', { eventTypes, territoryIds, routeIds });
-    // TODO: Implement when WebSocketManager supports subscriptions
-  }, []);
+    sendMessage({
+        type: 'subscribe',
+        data: {
+            event_types: eventTypes,
+            territory_ids: territoryIds,
+            route_ids: routeIds,
+        }
+    });
+  }, [sendMessage]);
 
-  // Unsubscribe from events (placeholder)
+  // Unsubscribe from events
   const unsubscribeFromEvents = useCallback((
     eventTypes?: string[],
     territoryIds?: string[],
     routeIds?: string[]
   ) => {
-    console.log('Unsubscribe from events:', { eventTypes, territoryIds, routeIds });
-    // TODO: Implement when WebSocketManager supports subscriptions
-  }, []);
+    sendMessage({
+        type: 'unsubscribe',
+        data: {
+            event_types: eventTypes,
+            territory_ids: territoryIds,
+            route_ids: routeIds,
+        }
+    });
+  }, [sendMessage]);
 
   // Register message handler
-  const onMessage = useCallback((messageType: string, handler: (message: WebSocketMessage) => void) => {
+  const onMessageHandler = useCallback((messageType: string, handler: (message: WebSocketMessage) => void) => {
     setMessageHandlers(prev => new Map(prev.set(messageType, handler)));
 
     // Return cleanup function
@@ -155,7 +188,7 @@ export const useWebSocketManager = (options: UseWebSocketManagerOptions = {}) =>
     sendMessage,
     subscribeToEvents,
     unsubscribeFromEvents,
-    onMessage,
+    onMessage: onMessageHandler,
     forceReconnect,
     disconnect,
     connect,
@@ -278,13 +311,13 @@ export const useRealTimeRouteTracking = (routeId?: string) => {
     if (!routeId || !wsHook.wsManager) return;
 
     console.log('Subscribing to route updates for:', routeId);
-    // TODO: Implement route subscription when WebSocketManager supports it
+    wsHook.subscribeToEvents(['coordinate_added', 'route_stats_updated'], undefined, [routeId]);
 
     return () => {
       console.log('Unsubscribing from route updates for:', routeId);
-      // TODO: Implement cleanup when WebSocketManager supports it
+      wsHook.unsubscribeFromEvents(['coordinate_added', 'route_stats_updated'], undefined, [routeId]);
     };
-  }, [routeId, wsHook.wsManager]);
+  }, [routeId, wsHook.wsManager, wsHook.subscribeToEvents, wsHook.unsubscribeFromEvents]);
 
   // Monitor connection health
   useEffect(() => {

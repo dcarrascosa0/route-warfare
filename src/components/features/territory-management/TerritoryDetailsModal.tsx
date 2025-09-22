@@ -1,50 +1,38 @@
-import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  MapPin, 
-  Navigation, 
-  Shield, 
-  Target, 
-  AlertTriangle,
-  Crown,
-  Clock,
-  TrendingUp,
-  User,
-  Calendar,
-  BarChart3,
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  X,
+  MapPin,
+  Shield,
+  Users,
   Swords,
-  Route,
-  History,
-  Zap,
-  Ruler,
-  Timer,
-  CheckCircle,
-  XCircle,
-  MapIcon,
-  Gauge,
-  GitBranch,
-  Map,
-  Activity,
-  ArrowRight,
-  ExternalLink,
-  PlayCircle,
-  StopCircle
+  Info,
+  GitCommit,
+  User,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldOff,
 } from "lucide-react";
-import { Territory } from "./types";
-import { toast } from "sonner";
+import { Territory } from "@/types/territory";
 import { useQuery } from "@tanstack/react-query";
 import { GatewayAPI } from "@/lib/api";
+import { queryKeys } from "@/lib/query";
+import { useState } from "react";
+import { LoadingSpinner } from "@/components/common";
 
 interface TerritoryDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   territory: Territory | null;
-  onViewRoute?: (routeId: string) => void;
-  onResolveConflict?: (conflictId: string, method: string) => void;
   onNavigateToRoutes?: () => void;
   onNavigateToRoute?: (routeId: string) => void;
 }
@@ -53,28 +41,20 @@ const TerritoryDetailsModal = ({
   isOpen, 
   onClose, 
   territory, 
-  onViewRoute,
-  onResolveConflict,
   onNavigateToRoutes,
-  onNavigateToRoute 
 }: TerritoryDetailsModalProps) => {
   const [isRouteMapOpen, setIsRouteMapOpen] = useState(false);
   
-  if (!territory) return null;
-
-  const currentUserId = localStorage.getItem("user_id");
-  const isOwned = territory?.owner_id === currentUserId;
-
-  // Fetch detailed route information if source route exists
-  const { data: routeDetails } = useQuery({
-    queryKey: ["routeDetails", territory.route_id, currentUserId],
-    queryFn: () => territory.route_id && currentUserId ? 
-      GatewayAPI.getRouteDetail(territory.route_id, currentUserId) : 
-      Promise.resolve({ ok: false } as any),
-    enabled: !!territory.route_id && !!currentUserId,
+  // Fetch detailed route info if a route is associated
+  const { data: detailedRoute, isLoading: isRouteLoading } = useQuery({
+    queryKey: queryKeys.route(territory?.route_id!, territory?.owner_id!),
+    queryFn: () => GatewayAPI.getRouteDetail(territory!.route_id!, territory!.owner_id!),
+    enabled: !!territory?.route_id && !!territory?.owner_id,
   });
 
-  const detailedRoute = routeDetails?.ok ? routeDetails.data : null;
+  if (!territory) return null;
+
+  const isOwned = territory.owner_id === localStorage.getItem("user_id");
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -88,97 +68,46 @@ const TerritoryDetailsModal = ({
   const getActionButton = (status: string, isOwned: boolean) => {
     const handleAction = (actionType: string) => {
       switch (actionType) {
-        case 'defend':
-          toast.success("Defense mode activated", { 
-            description: "You'll be notified of any attacks on this territory" 
-          });
+        case "view_routes":
+          onNavigateToRoutes?.();
           break;
-        case 'challenge':
-          toast.info("Challenge initiated", { 
-            description: "Plan a route around this territory to contest it" 
-          });
+        case "resolve_conflict":
+          // onResolveConflict?.(territory.conflicts[0].id, 'negotiate');
           break;
-        case 'claim':
-          toast.info("Route planner opened", { 
-            description: "Create a closed-loop route to claim this territory" 
-          });
-          break;
-        case 'join':
-          toast.info("Joining battle", { 
-            description: "Complete a route to join the contest for this territory" 
-          });
+        default:
           break;
       }
-      onClose();
     };
 
-    if (isOwned) {
+    if (status === 'contested') {
       return (
-        <Button 
-          className="w-full bg-green-500/20 hover:bg-green-500/30"
-          onClick={() => handleAction('defend')}
-        >
-          <Shield className="w-4 h-4 mr-2" />
-          Defend Territory
+        <Button onClick={() => handleAction("resolve_conflict")} className="w-full">
+          Resolve Conflict
         </Button>
       );
     }
-
-    switch (status) {
-      case 'claimed':
-        return (
-          <Button 
-            className="w-full bg-destructive/20 hover:bg-destructive/30"
-            onClick={() => handleAction('challenge')}
-          >
-            <Target className="w-4 h-4 mr-2" />
-            Challenge Territory
-          </Button>
-        );
-      case 'neutral':
-        return (
-          <Button 
-            className="w-full bg-primary hover:bg-primary/90"
-            onClick={() => handleAction('claim')}
-          >
-            <Navigation className="w-4 h-4 mr-2" />
-            Plan Route to Claim
-          </Button>
-        );
-      case 'contested':
-        return (
-          <Button 
-            className="w-full bg-red-500/20 hover:bg-red-500/30"
-            onClick={() => handleAction('join')}
-          >
-            <Swords className="w-4 h-4 mr-2" />
-            Join Battle
-          </Button>
-        );
-      default:
-        return null;
-    }
+    return (
+      <Button onClick={() => handleAction("view_routes")} className="w-full">
+        View My Routes
+      </Button>
+    );
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-    return 'Just now';
+    return new Date(dateString).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
   };
-
+  
   const formatFullDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleString(undefined, {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   };
 
@@ -207,20 +136,20 @@ const TerritoryDetailsModal = ({
       localStorage.setItem('selectedRouteId', routeId);
       onNavigateToRoutes();
       onClose();
-      toast.success("Navigating to route", {
-        description: `Opening route ${routeId.slice(0, 8)} on Routes page`
-      });
+      // toast.success("Navigating to route", {
+      //   description: `Opening route ${routeId.slice(0, 8)} on Routes page`
+      // });
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-2xl bg-card/95 border-border/50 max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-md md:max-w-lg lg:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {getStatusIcon(territory.status)}
             <span>Territory Details</span>
-            {isOwned && <Crown className="w-4 h-4 text-green-500" />}
+            {isOwned && <Shield className="w-4 h-4 text-green-500" />}
           </DialogTitle>
         </DialogHeader>
         
@@ -244,7 +173,7 @@ const TerritoryDetailsModal = ({
           <div className="grid grid-cols-2 gap-4">
             <Card className="bg-card/50">
               <CardContent className="p-4 text-center">
-                <BarChart3 className="w-6 h-6 mx-auto mb-2 text-primary" />
+                <Shield className="w-6 h-6 mx-auto mb-2 text-primary" />
                 <div className="text-2xl font-bold text-primary">
                   {territory.area_km2.toFixed(2)}
                 </div>
@@ -267,7 +196,7 @@ const TerritoryDetailsModal = ({
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-muted-foreground" />
+                <ShieldCheck className="w-4 h-4 text-muted-foreground" />
                 <span className="font-medium">Claimed</span>
               </div>
               <div className="text-right">
@@ -278,7 +207,7 @@ const TerritoryDetailsModal = ({
 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-muted-foreground" />
+                <Info className="w-4 h-4 text-muted-foreground" />
                 <span className="font-medium">Last Activity</span>
               </div>
               <div className="text-right">
@@ -310,7 +239,7 @@ const TerritoryDetailsModal = ({
                     This territory is being contested by {territory.contested_by.length} player{territory.contested_by.length > 1 ? 's' : ''}
                   </p>
                   <div className="flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-red-500" />
+                    <Users className="w-4 h-4 text-red-500" />
                     <span className="text-sm font-medium">Battle intensity: High</span>
                   </div>
                 </div>

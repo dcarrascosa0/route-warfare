@@ -3,7 +3,7 @@ import { GatewayAPI } from '@/lib/api';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
-interface User {
+export interface User {
   id: string;
   email: string;
   username: string;
@@ -23,6 +23,7 @@ interface AuthContextType extends AuthState {
   logout: () => void;
   refreshToken: () => Promise<boolean>;
   clearError: () => void;
+  token: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -312,6 +313,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const contextValue: AuthContextType = useMemo(() => ({
     ...authState,
+    token: TokenManager.getAccessToken(),
     login,
     logout,
     refreshToken,

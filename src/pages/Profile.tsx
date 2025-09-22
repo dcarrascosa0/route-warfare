@@ -20,11 +20,13 @@ import {
   X
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { GatewayAPI } from "@/lib/api";
+import { queryKeys, invalidateQueries } from "@/lib/query";
+import { GatewayAPI, type ApiResult, type UserProfile, type UserStatistics, type Territory, type Route as ApiRoute, type UserAchievement } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserStats, AchievementGrid } from "@/components/features/user-profile";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useParams } from "react-router-dom";
 
 interface UserData {
   id: string;
@@ -37,163 +39,152 @@ interface UserData {
   is_active?: boolean;
 }
 
-interface UserProfile {
-  user: UserData;
-  statistics: {
-    total_territory_area: number;
-    total_zones: number;
-    routes_completed: number;
-    win_rate: number;
-    current_rank: number;
-    level: number;
-    experience: number;
-  };
-  achievements: Array<{
-    id: string;
-    name: string;
-    description: string;
-    icon: string;
-    unlocked_at?: string;
-    earned?: boolean;
-  }>;
-}
 
 const Profile = () => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({
-    username: '',
-    email: '',
-    bio: '',
-  });
-
-  const { user: authUser, isAuthenticated } = useAuth();
+  const { userId: paramUserId } = useParams<{ userId?: string }>();
+  const { user: currentUser } = useAuth();
   const queryClient = useQueryClient();
+  const resolvedUserId = paramUserId ?? currentUser?.id;
+  const isOwnProfile = !paramUserId;
 
-  useEffect(() => {
-    document.title = "Profile - Route Wars";
-  }, []);
-
-  // Disable profile API calls entirely and use fallback data
-  const userProfile: UserProfile = {
-    user: authUser || {
-      id: '',
-      email: '',
-      username: 'User',
-      created_at: new Date().toISOString(),
+  const {
+    data: profileData,
+    isLoading: profileIsLoading,
+    isError: profileIsError,
+    error: profileError,
+  } = useQuery({
+    queryKey: queryKeys.userProfile(resolvedUserId as string),
+    queryFn: () => GatewayAPI.userProfile(resolvedUserId as string),
+    enabled: !!resolvedUserId,
+    select: (res: any) => {
+      // Handle ApiResult wrapper
+      if (res && typeof res === 'object' && 'ok' in res) {
+        return res.ok ? res.data : undefined;
+      }
+      // Handle direct data
+      return res;
     },
-    statistics: {
-      total_territory_area: 0,
-      total_zones: 0,
-      routes_completed: 0,
-      win_rate: 0,
-      current_rank: 0,
-      level: 1,
-      experience: 0,
-    },
-    achievements: [],
-  };
+  });
 
-  const profileLoading = false;
-  const profileError = null;
-
-  // Get user routes for accurate statistics (with graceful fallback)
   const { data: userRoutes } = useQuery({
-    queryKey: ["routes", authUser?.id],
-    queryFn: async () => {
-      if (!authUser?.id) return [];
-      
-      try {
-        const response = await GatewayAPI.routesForUser(authUser.id, 100);
-        if (!response.ok) return []; // Return empty array on failure
-        return response.data || [];
-      } catch (error) {
-        // Silently handle errors
-        console.warn('Routes API unavailable, using empty data');
-        return [];
+    queryKey: queryKeys.routesForUser(resolvedUserId as string, 10, "completed"),
+    queryFn: () => GatewayAPI.routesForUser(resolvedUserId as string, 10, "completed"),
+    enabled: !!resolvedUserId,
+    select: (res: any) => {
+      if (res && typeof res === 'object' && 'ok' in res) {
+        return res.ok && res.data ? res.data : [];
       }
+      return Array.isArray(res) ? res : [];
     },
-    enabled: !!authUser?.id,
-    retry: false,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
   });
 
-  // Get user territories for accurate statistics (with graceful fallback)
   const { data: userTerritories } = useQuery({
-    queryKey: ["userTerritories", authUser?.id],
-    queryFn: async () => {
-      if (!authUser?.id) return { territories: [] };
-      
-      try {
-        const response = await GatewayAPI.getUserTerritories(authUser.id);
-        if (!response.ok) return { territories: [] }; // Return empty array on failure
-        return response.data || { territories: [] };
-      } catch (error) {
-        // Silently handle errors
-        console.warn('Territories API unavailable, using empty data');
-        return { territories: [] };
+    queryKey: queryKeys.userTerritories(resolvedUserId as string),
+    queryFn: () => GatewayAPI.getUserTerritories(resolvedUserId as string),
+    enabled: !!resolvedUserId,
+    select: (res: any) => {
+      if (res && typeof res === 'object' && 'ok' in res) {
+        return res.ok && res.data ? res.data : [];
       }
+      return Array.isArray(res) ? res : [];
     },
-    enabled: !!authUser?.id,
-    retry: false,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
   });
 
-  const user = userProfile?.user || authUser;
-  const profile = userProfile;
-  const routes = userRoutes || [];
-  const territories = (userTerritories as any)?.territories || [];
-
-  // Get user achievements (if available from API) - add missing properties for compatibility
-  const achievements = (profile?.achievements || []).map(achievement => ({
-    ...achievement,
-    category: 'general', // Default category for existing achievements
-    points: 10, // Default points for existing achievements
-  }));
-
-  // Profile editing mutation
-  const updateProfileMutation = useMutation({
-    mutationFn: async (data: { username: string; email: string; bio?: string }) => {
-      // This would be implemented when the backend supports profile updates
-      // For now, just simulate success
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      return data;
+  const { data: userStats } = useQuery({
+    queryKey: queryKeys.userStatistics(resolvedUserId as string),
+    queryFn: () => GatewayAPI.userStatistics(resolvedUserId as string),
+    enabled: !!resolvedUserId,
+    select: (res: any) => {
+      if (res && typeof res === 'object' && 'ok' in res) {
+        return res.ok ? res.data : undefined;
+      }
+      return res;
     },
+  });
+
+  const { data: userAchievements } = useQuery({
+    queryKey: queryKeys.userAchievements(resolvedUserId as string),
+    queryFn: () => GatewayAPI.userAchievements(resolvedUserId as string),
+    enabled: !!resolvedUserId,
+    select: (res: any) => {
+      if (res && typeof res === 'object' && 'ok' in res) {
+        return res.ok && res.data ? res.data : [];
+      }
+      return Array.isArray(res) ? res : [];
+    },
+  });
+
+  const profile = profileData;
+  const statistics = userStats;
+  const achievements = userAchievements;
+
+
+
+  // State for editable profile fields
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedUsername, setEditedUsername] = useState(profile?.username || '');
+  const [editedEmail, setEditedEmail] = useState(profile?.email || '');
+
+  const updateProfileMutation = useMutation({
+    mutationFn: (updatedProfile: { username: string, email: string }) => GatewayAPI.updateUserProfile(resolvedUserId as string, updatedProfile),
     onSuccess: () => {
-      toast.success('Profile updated successfully!');
+      toast.success("Profile updated successfully!");
+      invalidateQueries.userProfile(queryClient, resolvedUserId as string);
       setIsEditing(false);
-      queryClient.invalidateQueries({ queryKey: ['userProfile'] });
     },
     onError: () => {
-      toast.error('Failed to update profile. Please try again.');
-    },
+      toast.error("Failed to update profile.");
+    }
   });
 
-  // Initialize edit form when user data is available
   useEffect(() => {
-    if (user && !isEditing) {
-      setEditForm({
-        username: user.username || '',
-        email: user.email || '',
-        bio: '', // Would come from profile data
-      });
+    if (profile) {
+      setEditedUsername(profile.username);
+      setEditedEmail(profile.email);
     }
-  }, [user, isEditing]);
+  }, [profile]);
 
-  const handleEditSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    updateProfileMutation.mutate(editForm);
+  if (!resolvedUserId) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="p-6"><CardContent><p className="text-center text-muted-foreground">Please log in to view your profile.</p></CardContent></Card>
+      </div>
+    );
+  }
+
+  if (profileIsLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center text-muted-foreground">Loading profile...</div>
+      </div>
+    );
+  }
+
+  if (profileIsError || (!profileIsLoading && !profile)) {
+    const title = isOwnProfile ? "Could not load your profile" : "Profile not found";
+    const description = isOwnProfile 
+      ? "There was an issue fetching your profile data. Please try again later." 
+      : "The user profile you are looking for does not exist.";
+
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-2">{title}</h2>
+          <p className="text-muted-foreground">{description}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const handleEditSubmit = () => {
+    updateProfileMutation.mutate({ username: editedUsername, email: editedEmail });
   };
 
   const handleEditCancel = () => {
     setIsEditing(false);
-    if (user) {
-      setEditForm({
-        username: user.username || '',
-        email: user.email || '',
-        bio: '',
-      });
+    if (profile) {
+      setEditedUsername(profile.username);
+      setEditedEmail(profile.email);
     }
   };
 
@@ -202,8 +193,8 @@ const Profile = () => {
     const activities: Array<{ id: string; type: string; description: string; time: string; points: string }> = [];
     
     // Add recent routes
-    if (Array.isArray(routes)) {
-      routes.slice(0, 5).forEach((route: any) => {
+    if (Array.isArray(userRoutes)) {
+      userRoutes.slice(0, 5).forEach((route: any) => {
         activities.push({
           id: route.id,
           type: route.status === 'completed' ? 'route' : 'route_active',
@@ -217,8 +208,8 @@ const Profile = () => {
     }
     
     // Add recent territories
-    if (Array.isArray(territories)) {
-      territories.slice(0, 3).forEach((territory: any) => {
+    if (Array.isArray(userTerritories)) {
+      userTerritories.slice(0, 3).forEach((territory: any) => {
         activities.push({
           id: territory.id,
           type: 'territory',
@@ -233,13 +224,13 @@ const Profile = () => {
     return activities
       .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
       .slice(0, 5);
-  }, [routes, territories, profile]);
+  }, [userRoutes, userTerritories]);
 
   // Calculate real statistics from API data
-  const totalRoutes = Array.isArray(routes) ? routes.length : 0;
-  const completedRoutes = Array.isArray(routes) ? routes.filter((r: any) => r.status === 'completed').length : 0;
-  const totalTerritories = Array.isArray(territories) ? territories.length : 0;
-  const totalTerritoryArea = Array.isArray(territories) ? territories.reduce((sum: number, t: any) => sum + (t.area_km2 || 0), 0) : 0;
+  const totalRoutes = Array.isArray(userRoutes) ? userRoutes.length : 0;
+  const completedRoutes = Array.isArray(userRoutes) ? userRoutes.filter((r: any) => r.status === 'completed').length : 0;
+  const totalTerritories = Array.isArray(userTerritories) ? userTerritories.length : 0;
+  const totalTerritoryArea = Array.isArray(userTerritories) ? userTerritories.reduce((sum: number, t: any) => sum + (t.area_km2 || 0), 0) : 0;
 
   const stats: Array<{ label: string; value: string; icon: any; color: string }> = [
     {
@@ -279,7 +270,7 @@ const Profile = () => {
     }
   };
 
-  if (!isAuthenticated) {
+  if (!currentUser) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Card className="p-6">
@@ -292,7 +283,7 @@ const Profile = () => {
   }
 
   // Show warning if there are API issues but still display the profile
-  const hasApiIssues = profileError;
+  const hasApiIssues = !profileIsLoading && (!profile || !statistics || !achievements);
 
   return (
     <div className="min-h-screen bg-background">
@@ -315,7 +306,7 @@ const Profile = () => {
                   <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-6">
                     <Avatar className="w-16 h-16 sm:w-20 sm:h-20 mx-auto sm:mx-0">
                       <AvatarFallback className="bg-primary/20 text-primary text-xl sm:text-2xl font-bold">
-                        {editForm.username ? editForm.username.substring(0, 2).toUpperCase() : "??"}
+                        {editedUsername ? editedUsername.substring(0, 2).toUpperCase() : "??"}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 space-y-4">
@@ -324,8 +315,8 @@ const Profile = () => {
                           <Label htmlFor="username">Username</Label>
                           <Input
                             id="username"
-                            value={editForm.username}
-                            onChange={(e) => setEditForm(prev => ({ ...prev, username: e.target.value }))}
+                            value={editedUsername}
+                            onChange={(e) => setEditedUsername(e.target.value)}
                             placeholder="Enter username"
                           />
                         </div>
@@ -334,8 +325,8 @@ const Profile = () => {
                           <Input
                             id="email"
                             type="email"
-                            value={editForm.email}
-                            onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                            value={editedEmail}
+                            onChange={(e) => setEditedEmail(e.target.value)}
                             placeholder="Enter email"
                           />
                         </div>
@@ -344,8 +335,8 @@ const Profile = () => {
                         <Label htmlFor="bio">Bio</Label>
                         <Textarea
                           id="bio"
-                          value={editForm.bio}
-                          onChange={(e) => setEditForm(prev => ({ ...prev, bio: e.target.value }))}
+                          value={profile?.bio || ''} // Assuming bio is part of UserData
+                          onChange={(e) => { /* No direct update for bio, as it's not in the UserData interface */ }}
                           placeholder="Tell us about yourself..."
                           rows={3}
                         />
@@ -376,40 +367,40 @@ const Profile = () => {
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
                   <Avatar className="w-16 h-16 sm:w-20 sm:h-20 mx-auto sm:mx-0">
                     <AvatarFallback className="bg-primary/20 text-primary text-xl sm:text-2xl font-bold">
-                      {user?.username ? user.username.substring(0, 2).toUpperCase() : "??"}
+                      {profile?.username ? profile.username.substring(0, 2).toUpperCase() : "??"}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 text-center sm:text-left">
                     <h1 className="text-2xl sm:text-3xl font-bold mb-2">
-                      {user?.username || "Loading..."}
+                      {profile?.username || "Loading..."}
                     </h1>
-                    <p className="text-muted-foreground mb-4">{user?.email}</p>
+                    <p className="text-muted-foreground mb-4">{profile?.email}</p>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-muted-foreground mb-4">
                       <span className="flex items-center justify-center sm:justify-start gap-1">
                         <Calendar className="w-4 h-4" />
-                        Member since {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : "Unknown"}
+                        Member since {profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : "Unknown"}
                       </span>
                       <span className="flex items-center justify-center sm:justify-start gap-1">
                         <Activity className="w-4 h-4" />
-                        Last login: {(user as any)?.last_login ? new Date((user as any).last_login).toLocaleDateString() : "Never"}
+                        Last login: {(profile as any)?.last_login ? new Date((profile as any).last_login).toLocaleDateString() : "Never"}
                       </span>
                     </div>
                     <div className="flex flex-wrap justify-center sm:justify-start gap-2">
-                      {(user as any)?.is_verified && (
+                      {(profile as any)?.is_verified && (
                         <Badge className="bg-green-500/20 text-green-600">
                           <Shield className="w-3 h-3 mr-1" />
                           Verified
                         </Badge>
                       )}
-                      {(user as any)?.is_active !== false && (
+                      {(profile as any)?.is_active !== false && (
                         <Badge variant="outline" className="border-primary/30">
                           <Activity className="w-3 h-3 mr-1" />
                           Active
                         </Badge>
                       )}
-                      {profile?.statistics?.level && profile.statistics.level > 1 && (
+                      {statistics?.level && statistics.level > 1 && (
                         <Badge variant="outline" className="border-territory-neutral/30">
-                          Level {profile.statistics.level}
+                          Level {statistics.level}
                         </Badge>
                       )}
                     </div>
@@ -487,7 +478,7 @@ const Profile = () => {
             </Card>
 
             {/* Performance Statistics */}
-            {profile?.statistics && (
+            {statistics && (
               <Card className="bg-card/80 border-border/50">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -496,7 +487,7 @@ const Profile = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <UserStats statistics={profile.statistics} />
+                  <UserStats statistics={statistics} />
                 </CardContent>
               </Card>
             )}
@@ -510,7 +501,7 @@ const Profile = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <AchievementGrid achievements={achievements} />
+                <AchievementGrid achievements={achievements || []} />
               </CardContent>
             </Card>
           </div>

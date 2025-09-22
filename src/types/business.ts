@@ -2,7 +2,10 @@
  * Business logic type definitions.
  */
 
-import type { BaseEntity, UserOwnedEntity, NamedEntity, GeoCoordinate, GeoPoint } from './common';
+import {
+  GeoPoint,
+  GeoCoordinate,
+} from './common';
 
 // Route-related types
 export interface RouteCoordinate extends GeoCoordinate {

@@ -2,8 +2,7 @@
  * UI-related type definitions.
  */
 
-import type { ReactNode } from 'react';
-import type { LoadingState } from './common';
+import { ReactNode } from "react";
 
 export interface ComponentProps {
   className?: string;

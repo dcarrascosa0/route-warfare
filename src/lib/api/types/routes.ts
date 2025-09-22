@@ -44,6 +44,45 @@ export interface CompleteRouteRequest {
   force_completion?: boolean;
 }
 
+export interface TerritoryClaimResult {
+  territory_id: string;
+  area_square_meters: number;
+  area_km2: number;
+  is_closed_loop: boolean;
+}
+
+export interface TerritoryConflictInfo {
+  territory_id: string;
+  owner_id: string;
+  territory_name: string;
+  overlap_percentage: number;
+  overlap_area_sqm: number;
+}
+
+export interface ConflictResolution {
+  should_proceed: boolean;
+  reason: string;
+  conflict_level: 'none' | 'minor' | 'significant' | 'major';
+  major_conflicts: number;
+  significant_conflicts: number;
+  minor_conflicts: number;
+  total_conflicts: number;
+}
+
+export interface CompleteRouteResponse extends Route {
+  // Territory claiming results
+  territory_claim_status?: 'success' | 'blocked' | 'failed' | 'ineligible' | 'error';
+  territory_claim_reason?: string;
+  territory_claim?: TerritoryClaimResult;
+  territory_conflicts?: TerritoryConflictInfo[];
+  conflict_resolution?: ConflictResolution;
+  territory_eligibility?: {
+    eligible: boolean;
+    reason: string;
+    details: Record<string, any>;
+  };
+}
+
 export interface RouteStatistics {
   total_distance_km: number;
   total_duration_hours: number;

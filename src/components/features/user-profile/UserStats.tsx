@@ -23,13 +23,22 @@ import {
 } from 'lucide-react';
 
 interface Statistics {
-  total_territory_area: number;
-  total_zones: number;
-  routes_completed: number;
-  win_rate: number;
-  current_rank: number;
-  level: number;
-  experience: number;
+  total_routes: number;
+  total_distance_km: number;
+  total_duration_hours: number;
+  total_territories: number;
+  total_territory_area_km2: number;
+  average_speed_kmh: number;
+  completion_rate: number;
+  // Optional fields that might not be in backend response
+  rank?: number;
+  level?: number;
+  experience?: number;
+  total_territory_area?: number;
+  total_zones?: number;
+  routes_completed?: number;
+  win_rate?: number;
+  current_rank?: number;
 }
 
 interface UserStatsProps {
@@ -48,18 +57,21 @@ const UserStats = ({ statistics }: UserStatsProps) => {
     { day: 'Sun', routes: 1, territory: 0.4 },
   ];
 
+  const totalZones = statistics.total_zones || statistics.total_territories || 0;
   const territoryBreakdown = [
-    { name: 'Claimed', value: statistics.total_zones, color: '#22c55e' },
-    { name: 'Contested', value: Math.floor(statistics.total_zones * 0.2), color: '#ef4444' },
-    { name: 'Available', value: Math.floor(statistics.total_zones * 0.1), color: '#6b7280' },
+    { name: 'Claimed', value: totalZones, color: '#22c55e' },
+    { name: 'Contested', value: Math.floor(totalZones * 0.2), color: '#ef4444' },
+    { name: 'Available', value: Math.floor(totalZones * 0.1), color: '#6b7280' },
   ];
 
-  // Calculate level progress
-  const currentLevelXP = (statistics.level - 1) * 1000;
-  const nextLevelXP = statistics.level * 1000;
-  const progressInLevel = statistics.experience - currentLevelXP;
+  // Calculate level progress with fallbacks
+  const level = statistics.level || 1;
+  const experience = statistics.experience || 0;
+  const currentLevelXP = (level - 1) * 1000;
+  const nextLevelXP = level * 1000;
+  const progressInLevel = experience - currentLevelXP;
   const xpNeededForNextLevel = nextLevelXP - currentLevelXP;
-  const levelProgress = (progressInLevel / xpNeededForNextLevel) * 100;
+  const levelProgress = xpNeededForNextLevel > 0 ? (progressInLevel / xpNeededForNextLevel) * 100 : 0;
 
   return (
     <div className="space-y-6">
@@ -73,7 +85,7 @@ const UserStats = ({ statistics }: UserStatsProps) => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Territory Area</p>
-                <p className="text-xl font-bold">{statistics.total_territory_area.toFixed(2)} km²</p>
+                <p className="text-xl font-bold">{(statistics.total_territory_area || statistics.total_territory_area_km2 || 0).toFixed(2)} km²</p>
               </div>
             </div>
           </CardContent>
@@ -87,7 +99,7 @@ const UserStats = ({ statistics }: UserStatsProps) => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Success Rate</p>
-                <p className="text-xl font-bold">{(statistics.win_rate * 100).toFixed(1)}%</p>
+                <p className="text-xl font-bold">{((statistics.win_rate || statistics.completion_rate || 0) * 100).toFixed(1)}%</p>
               </div>
             </div>
           </CardContent>
@@ -101,7 +113,7 @@ const UserStats = ({ statistics }: UserStatsProps) => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Global Rank</p>
-                <p className="text-xl font-bold">#{statistics.current_rank}</p>
+                <p className="text-xl font-bold">#{statistics.current_rank || statistics.rank || 'N/A'}</p>
               </div>
             </div>
           </CardContent>
@@ -120,7 +132,7 @@ const UserStats = ({ statistics }: UserStatsProps) => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-lg font-semibold">Level {statistics.level}</p>
+                <p className="text-lg font-semibold">Level {level}</p>
                 <p className="text-sm text-muted-foreground">
                   {progressInLevel.toLocaleString()} / {xpNeededForNextLevel.toLocaleString()} XP
                 </p>
@@ -199,7 +211,7 @@ const UserStats = ({ statistics }: UserStatsProps) => {
         <Card>
           <CardContent className="p-4 text-center">
             <Target className="w-8 h-8 text-blue-500 mx-auto mb-2" />
-            <p className="text-2xl font-bold">{statistics.routes_completed}</p>
+            <p className="text-2xl font-bold">{statistics.routes_completed || statistics.total_routes || 0}</p>
             <p className="text-sm text-muted-foreground">Routes Completed</p>
           </CardContent>
         </Card>
@@ -207,7 +219,7 @@ const UserStats = ({ statistics }: UserStatsProps) => {
         <Card>
           <CardContent className="p-4 text-center">
             <MapPin className="w-8 h-8 text-green-500 mx-auto mb-2" />
-            <p className="text-2xl font-bold">{statistics.total_zones}</p>
+            <p className="text-2xl font-bold">{totalZones}</p>
             <p className="text-sm text-muted-foreground">Zones Claimed</p>
           </CardContent>
         </Card>
@@ -215,7 +227,7 @@ const UserStats = ({ statistics }: UserStatsProps) => {
         <Card>
           <CardContent className="p-4 text-center">
             <TrendingUp className="w-8 h-8 text-purple-500 mx-auto mb-2" />
-            <p className="text-2xl font-bold">{statistics.experience.toLocaleString()}</p>
+            <p className="text-2xl font-bold">{experience.toLocaleString()}</p>
             <p className="text-sm text-muted-foreground">Total XP</p>
           </CardContent>
         </Card>
@@ -223,7 +235,7 @@ const UserStats = ({ statistics }: UserStatsProps) => {
         <Card>
           <CardContent className="p-4 text-center">
             <Trophy className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
-            <p className="text-2xl font-bold">#{statistics.current_rank}</p>
+            <p className="text-2xl font-bold">#{statistics.current_rank || statistics.rank || 'N/A'}</p>
             <p className="text-sm text-muted-foreground">Global Rank</p>
           </CardContent>
         </Card>

@@ -1,4 +1,13 @@
 // Service Worker for Route Wars
+import {
+  getOfflineRoutes,
+  removeOfflineRoute,
+  getOfflineTerritoryActions,
+  removeOfflineTerritoryAction,
+} from "./lib/indexed-db";
+
+declare const self: ServiceWorkerGlobalScope;
+
 const CACHE_NAME = 'route-wars-v1';
 const STATIC_CACHE_NAME = 'route-wars-static-v1';
 const DYNAMIC_CACHE_NAME = 'route-wars-dynamic-v1';
@@ -70,6 +79,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Handle map tiles
+  if (url.hostname === 'a.tile.openstreetmap.org' || url.hostname === 'b.tile.openstreetmap.org' || url.hostname === 'c.tile.openstreetmap.org') {
+    event.respondWith(handleMapTileRequest(request));
+    return;
+  }
+
   // Handle API requests
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(handleApiRequest(request));
@@ -137,6 +152,27 @@ async function handleApiRequest(request) {
     
     throw error;
   }
+}
+
+// Handle map tile requests with a cache-first strategy
+async function handleMapTileRequest(request) {
+    const cache = await caches.open(DYNAMIC_CACHE_NAME);
+    const cachedResponse = await cache.match(request);
+
+    if (cachedResponse) {
+        return cachedResponse;
+    }
+
+    try {
+        const networkResponse = await fetch(request);
+        if (networkResponse.ok) {
+            await cache.put(request, networkResponse.clone());
+        }
+        return networkResponse;
+    } catch (error) {
+        console.error('Failed to fetch map tile:', error);
+        throw error;
+    }
 }
 
 // Handle static assets with cache-first strategy
@@ -216,7 +252,7 @@ async function syncOfflineRoutes() {
     // Get offline route data from IndexedDB
     const offlineRoutes = await getOfflineRoutes();
     
-    for (const route of offlineRoutes) {
+    for (const route of offlineRoutes as any[]) {
       try {
         await fetch('/api/v1/routes', {
           method: 'POST',
@@ -243,7 +279,7 @@ async function syncOfflineTerritoryActions() {
   try {
     const offlineActions = await getOfflineTerritoryActions();
     
-    for (const action of offlineActions) {
+    for (const action of offlineActions as any[]) {
       try {
         await fetch(`/api/v1/territories/${action.territoryId}/claim`, {
           method: 'POST',
@@ -262,26 +298,6 @@ async function syncOfflineTerritoryActions() {
   } catch (error) {
     console.error('Territory sync failed:', error);
   }
-}
-
-// Placeholder functions for IndexedDB operations
-// These would be implemented with proper IndexedDB operations
-async function getOfflineRoutes() {
-  // Implementation would retrieve from IndexedDB
-  return [];
-}
-
-async function removeOfflineRoute(id) {
-  // Implementation would remove from IndexedDB
-}
-
-async function getOfflineTerritoryActions() {
-  // Implementation would retrieve from IndexedDB
-  return [];
-}
-
-async function removeOfflineTerritoryAction(id) {
-  // Implementation would remove from IndexedDB
 }
 
 // Handle push notifications (future enhancement)

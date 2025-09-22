@@ -44,5 +44,5 @@ export interface AchievementProgressProps {
 export interface UserProfileProps {
     userId: string;
     editable?: boolean;
-    onUpdate?: (profile: any) => void;
+    onUpdate?: (profile: { [key: string]: string | number | boolean }) => void;
 }

@@ -1,19 +1,114 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback, memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Route, Search, Target, Plus, Trash2, Eye, Calendar, Activity, StopCircle, AlertTriangle, CheckCircle, XCircle, Clock, MapPin, Award, TrendingUp, RefreshCw } from "lucide-react";
+import { Route, Search, Target, Trash2, Eye, Calendar, Activity, StopCircle, AlertTriangle, CheckCircle, XCircle, Clock, Award, TrendingUp, RefreshCw } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { GatewayAPI } from "@/lib/api";
+import { queryKeys } from "@/lib/query";
+import { useActiveRoute } from "@/hooks/useApiQueries";
 import LiveRouteTracker from "@/components/features/route-tracking/LiveRouteTracker";
 import GPSSimulator from "@/components/common/dev/GPSSimulator";
 import RouteMapModal from "@/components/features/route-tracking/RouteMapModal";
 import TerritoryClaimRetry from "@/components/features/territory-management/TerritoryClaimRetry";
+import { EmptyState } from "@/components/common/EmptyState";
 import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/hooks/useAuth";
+import { useTerritory } from "@/hooks/useTerritory";
+import { MapPin, Maximize } from "lucide-react";
 
-interface RouteData {
+const MemoizedLiveRouteTracker = memo(LiveRouteTracker);
+const MemoizedGPSSimulator = memo(GPSSimulator);
+
+// Simple territory preview component for showing conquered territory
+const TerritoryPreview = ({ territoryData, onViewFullMap }: {
+  territoryData: any,
+  onViewFullMap: () => void
+}) => {
+  if (!territoryData?.ok || !territoryData.data) return null;
+
+  const territory = territoryData.data;
+  const coordinates = territory.boundary_coordinates || [];
+
+  // Calculate center point of the territory
+  const center = useMemo(() => {
+    if (!coordinates || coordinates.length === 0) return [0, 0];
+    const lats = coordinates.map((c: any) => c.latitude);
+    const lngs = coordinates.map((c: any) => c.longitude);
+    return [
+      (Math.min(...lats) + Math.max(...lats)) / 2,
+      (Math.min(...lngs) + Math.max(...lngs)) / 2
+    ];
+  }, [coordinates]);
+
+  if (coordinates.length === 0) {
+    return (
+      <div className="bg-white rounded border h-32 flex items-center justify-center">
+        <div className="text-center text-green-600">
+          <MapPin className="w-8 h-8 mx-auto mb-1" />
+          <p className="text-sm font-medium">
+            {territory.name || `Territory ${territory.id.slice(0, 8)}`}
+          </p>
+          <p className="text-xs text-green-600">
+            {territory.area_km2.toFixed(2)} km²
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Simple polygon representation
+  const polygonPoints = coordinates.map((coord: any, index: number) => {
+    const x = ((coord.longitude - center[1]) * 100) + 50; // Simple scaling
+    const y = ((coord.latitude - center[0]) * 100) + 50;  // Simple scaling
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <div className="bg-white rounded border h-32 overflow-hidden relative">
+      <svg className="w-full h-full" viewBox="0 0 100 100">
+        <defs>
+          <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
+            <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#f0f0f0" strokeWidth="0.5"/>
+          </pattern>
+        </defs>
+        <rect width="100" height="100" fill="url(#grid)" />
+
+        {/* Territory polygon */}
+        <polygon
+          points={polygonPoints}
+          fill="rgba(34, 197, 94, 0.3)"
+          stroke="rgba(34, 197, 94, 0.8)"
+          strokeWidth="1"
+        />
+
+        {/* Center point */}
+        <circle cx="50" cy="50" r="2" fill="#22c55e" />
+      </svg>
+
+      <div className="absolute bottom-1 left-1 text-xs text-green-700 bg-white/90 rounded px-1 font-medium">
+        {territory.name || `Territory ${territory.id.slice(0, 8)}`}
+      </div>
+      <div className="absolute bottom-1 right-1 text-xs text-green-600 bg-white/80 rounded px-1">
+        {territory.area_km2.toFixed(1)} km²
+      </div>
+
+      <Button
+        size="sm"
+        variant="outline"
+        className="absolute top-1 right-1 h-6 text-xs bg-white/90 hover:bg-white"
+        onClick={onViewFullMap}
+      >
+        <Maximize className="w-3 h-3" />
+      </Button>
+    </div>
+  );
+};
+
+export interface RouteData {
   id: string;
   name?: string;
   description?: string;
@@ -40,6 +135,8 @@ interface RouteData {
 }
 
 const Routes = () => {
+  const { user } = useAuth();
+  const userId = user?.id;
   const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "completed" | "abandoned">("all");
@@ -69,29 +166,37 @@ const Routes = () => {
     }
   }, []);
 
-  const userId = useMemo(() => localStorage.getItem("user_id"), []);
+  // Fetch active route
+  const { data: activeRoute, refetch: refetchActiveRoute, isLoading: isLoadingActiveRoute } = useActiveRoute(userId);
 
   // Fetch user routes
   const { data: userRoutes, isLoading, error, refetch } = useQuery({
-    queryKey: ["routes", userId],
-    queryFn: () => (userId ? GatewayAPI.routesForUser(userId, 50) : Promise.resolve({ ok: false } as any)),
+    queryKey: queryKeys.routesForUser(userId!, 50),
+    queryFn: () => (userId ? GatewayAPI.routesForUser(userId, 50, statusFilter) : Promise.resolve({ ok: false } as any)),
     enabled: !!userId,
-  });
-
-  // Fetch active route
-  const { data: activeRoute, refetch: refetchActiveRoute, isLoading: isLoadingActiveRoute } = useQuery({
-    queryKey: ["activeRoute", userId],
-    queryFn: () => (userId ? GatewayAPI.getActiveRoute(userId) : Promise.resolve({ ok: false } as any)),
-    enabled: !!userId,
-    refetchInterval: 5000, // Refresh every 5 seconds
-    staleTime: 0, // Always consider data stale to force fresh fetches
   });
 
   // Fetch selected route details
   const { data: selectedRouteDetails } = useQuery({
-    queryKey: ["routeDetails", selectedRoute, userId],
+    queryKey: queryKeys.route(selectedRoute!, userId!),
     queryFn: () => (selectedRoute && userId ? GatewayAPI.getRouteDetail(selectedRoute, userId) : Promise.resolve({ ok: false } as any)),
     enabled: !!selectedRoute && !!userId,
+  });
+
+  // Fetch route detail (with coordinates) for Route Map modal when open
+  const { data: routeMapDetail } = useQuery({
+    queryKey: queryKeys.route(routeMapModalData?.id!, userId!),
+    queryFn: () => (routeMapModalData?.id && userId ? GatewayAPI.getRouteDetail(routeMapModalData.id, userId) : Promise.resolve({ ok: false } as any)),
+    enabled: !!routeMapModalOpen && !!routeMapModalData?.id && !!userId,
+  });
+
+  // Fetch territory data when a route has a successful claim
+  const { data: territoryData } = useQuery({
+    queryKey: queryKeys.territory(selectedRouteDetails?.data?.territory_id!),
+    queryFn: () => (selectedRouteDetails?.data?.territory_id && selectedRouteDetails.data.territory_claim_status === "success"
+      ? GatewayAPI.getTerritory(selectedRouteDetails.data.territory_id)
+      : Promise.resolve({ ok: false } as any)),
+    enabled: !!selectedRouteDetails?.data?.territory_id && selectedRouteDetails.data.territory_claim_status === "success",
   });
 
   // Delete route mutation
@@ -99,7 +204,7 @@ const Routes = () => {
     mutationFn: ({ routeId, userId }: { routeId: string; userId: string }) =>
       GatewayAPI.deleteRoute(routeId, userId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["routes", userId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.routesForUser(userId!) });
       setSelectedRoute(null);
       setDeleteModalOpen(false);
       setRouteToDelete(null);
@@ -107,51 +212,41 @@ const Routes = () => {
   });
 
   // Handle delete confirmation
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = useCallback(() => {
     if (routeToDelete && userId) {
       deleteRouteMutation.mutate({ routeId: routeToDelete.id, userId });
     }
-  };
+  }, [routeToDelete, userId, deleteRouteMutation]);
 
   // Handle delete cancel
-  const handleDeleteCancel = () => {
+  const handleDeleteCancel = useCallback(() => {
     setDeleteModalOpen(false);
     setRouteToDelete(null);
-  };
+  }, []);
 
   // Handle route map modal
-  const handleOpenRouteMap = (route: RouteData) => {
+  const handleOpenRouteMap = useCallback((route: RouteData) => {
     setRouteMapModalData(route);
     setRouteMapModalOpen(true);
-  };
+  }, []);
 
-  const handleNavigateToTerritory = (territoryId: string) => {
+  const handleNavigateToTerritory = useCallback((territoryId: string) => {
     // Store the territory ID for highlighting and navigate
     localStorage.setItem('highlightTerritoryId', territoryId);
     window.location.href = `/territory?highlight=${territoryId}`;
-  };
+  }, []);
 
-  const handleRouteToTerritoryNavigation = (route: RouteData) => {
-    if (route.territory_id) {
-      handleNavigateToTerritory(route.territory_id);
-    } else {
-      // Open route map modal to show potential territory area
-      handleOpenRouteMap(route);
-      toast.info("This route can claim territory. View the map to see the potential area.");
-    }
-  };
-
-  const handleRetryTerritoryClaimFromRoute = (route: RouteData) => {
+  const handleRetryTerritoryClaimFromRoute = useCallback((route: RouteData) => {
     setTerritoryRetryRouteData(route);
     setTerritoryRetryModalOpen(true);
-  };
+  }, []);
 
-  const handleTerritoryClaimSuccess = (territoryId: string) => {
+  const handleTerritoryClaimSuccess = useCallback((territoryId: string) => {
     // Navigate to the newly claimed territory
     handleNavigateToTerritory(territoryId);
     setTerritoryRetryModalOpen(false);
     setTerritoryRetryRouteData(null);
-  };
+  }, [handleNavigateToTerritory]);
 
   const routes: RouteData[] = useMemo(() => {
     const ok = (userRoutes as any)?.ok && (userRoutes as any)?.data;
@@ -160,32 +255,25 @@ const Routes = () => {
     return Array.isArray(list) ? list : [];
   }, [userRoutes]);
 
-  const currentActiveRoute = useMemo(() => {
-    const ok = (activeRoute as any)?.ok && (activeRoute as any)?.data;
-    return ok ? (activeRoute as any).data : null;
-  }, [activeRoute]);
-
-
-
-  const getStatusColor = (status: string) => {
+  const getStatusColor = useCallback((status: string) => {
     switch (status) {
       case "active": return "primary";
       case "completed": return "territory-claimed";
       case "abandoned": return "destructive";
       default: return "muted";
     }
-  };
+  }, []);
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = useCallback((status: string) => {
     switch (status) {
       case "active": return <Activity className="w-4 h-4" />;
       case "completed": return <Target className="w-4 h-4" />;
       case "abandoned": return <StopCircle className="w-4 h-4" />;
       default: return <Route className="w-4 h-4" />;
     }
-  };
+  }, []);
 
-  const getTerritoryClaimStatusBadge = (route: RouteData) => {
+  const getTerritoryClaimStatusBadge = useCallback((route: RouteData) => {
     if (route.status !== "completed" || !route.stats.is_closed_loop) {
       return null;
     }
@@ -224,9 +312,9 @@ const Routes = () => {
       default:
         return null;
     }
-  };
+  }, []);
 
-  const getTerritoryImpactMetrics = (route: RouteData) => {
+  const getTerritoryImpactMetrics = useCallback((route: RouteData) => {
     const { stats } = route;
     const metrics = [];
 
@@ -262,29 +350,29 @@ const Routes = () => {
     }
 
     return metrics;
-  };
+  }, []);
 
-  const filteredRoutes = routes.filter((route) => {
+  const filteredRoutes = useMemo(() => routes.filter((route) => {
     const matchesSearch = (route.name || `Route ${route.id.slice(0, 8)}`).toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || route.status === statusFilter;
     return matchesSearch && matchesStatus;
-  });
+  }), [routes, searchTerm, statusFilter]);
 
-  const formatDistance = (meters: number | null | undefined) => {
+  const formatDistance = useCallback((meters: number | null | undefined) => {
     if (meters == null) return "—";
     if (meters < 1000) return `${meters.toFixed(0)}m`;
     return `${(meters / 1000).toFixed(1)}km`;
-  };
+  }, []);
 
-  const formatDuration = (seconds?: number) => {
+  const formatDuration = useCallback((seconds?: number) => {
     if (!seconds) return "—";
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     if (hours > 0) return `${hours}h ${minutes}m`;
     return `${minutes}m`;
-  };
+  }, []);
 
-  const formatDate = (dateString: string) => {
+  const formatDate = useCallback((dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -292,45 +380,49 @@ const Routes = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
-  };
+  }, []);
 
   // Handle route lifecycle events
-  const handleRouteComplete = () => {
-    queryClient.invalidateQueries({ queryKey: ["routes", userId] });
-    queryClient.invalidateQueries({ queryKey: ["activeRoute", userId] });
+  const handleRouteComplete = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.routesForUser(userId!) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.activeRoute(userId!) });
     queryClient.invalidateQueries({ queryKey: ["territories"] });
     queryClient.invalidateQueries({ queryKey: ["userTerritories", userId] });
     queryClient.invalidateQueries({ queryKey: ["contestedTerritories"] });
-  };
+  }, [queryClient, userId]);
 
-  const handleRouteStart = () => {
-    queryClient.invalidateQueries({ queryKey: ["routes", userId] });
-    queryClient.invalidateQueries({ queryKey: ["activeRoute", userId] });
-  };
+  const handleRouteStart = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.routesForUser(userId!) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.activeRoute(userId!) });
+  }, [queryClient, userId]);
 
-  const handleRouteStop = () => {
-    queryClient.invalidateQueries({ queryKey: ["routes", userId] });
-    queryClient.invalidateQueries({ queryKey: ["activeRoute", userId] });
-  };
+  const handleRouteStop = useCallback(async () => {
+    // Add a small delay to ensure the API call completes
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.routesForUser(userId!) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.activeRoute(userId!) });
+    }, 100);
+  }, [queryClient, userId]);
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4">
             <div>
-              <h1 className="text-4xl font-bold mb-2">My Routes</h1>
-              <p className="text-xl text-muted-foreground">
+              <h1 className="text-3xl sm:text-4xl font-bold mb-2">My Routes</h1>
+              <p className="text-lg sm:text-xl text-muted-foreground">
                 Track your GPS routes and claim territory by completing closed loops.
               </p>
             </div>
             <Button
               onClick={() => {
                 refetchActiveRoute();
-                queryClient.invalidateQueries({ queryKey: ["routes", userId] });
+                queryClient.invalidateQueries({ queryKey: queryKeys.routesForUser(userId!) });
               }}
               variant="outline"
               disabled={isLoadingActiveRoute}
+              className="mt-4 sm:mt-0"
             >
               <Activity className="w-4 h-4 mr-2" />
               {isLoadingActiveRoute ? "Refreshing..." : "Refresh"}
@@ -339,7 +431,7 @@ const Routes = () => {
 
           {/* Live Route Tracking */}
           <div className="mb-8">
-            <LiveRouteTracker
+            <MemoizedLiveRouteTracker
               userId={userId!}
               onRouteComplete={handleRouteComplete}
               onRouteStart={handleRouteStart}
@@ -374,9 +466,9 @@ const Routes = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
           {/* Routes List */}
-          <div className="lg:col-span-2 space-y-4">
+          <div className="xl:col-span-2 space-y-4">
             {isLoading && (
               <Card className="bg-card/80 border-border/50">
                 <CardContent className="p-6 text-center">
@@ -398,287 +490,301 @@ const Routes = () => {
             )}
 
             {!isLoading && !error && filteredRoutes.length === 0 && (
-              <Card className="bg-card/80 border-border/50">
-                <CardContent className="p-6 text-center">
-                  <Route className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="font-semibold mb-2">No Routes Found</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    {routes.length === 0
-                      ? "Start your first route to begin claiming territory!"
-                      : "No routes match your current filters."}
-                  </p>
-                  <div className="text-muted-foreground">
-                    Use the live tracker above to start your first route
-                  </div>
-                </CardContent>
-              </Card>
+              <EmptyState
+                Icon={Route}
+                title={routes.length === 0 ? "No Routes Yet" : "No Routes Found"}
+                message={
+                  routes.length === 0
+                    ? "Start your first route using the live tracker above to begin claiming territory!"
+                    : "No routes match your current search term or filters."
+                }
+                action={
+                  routes.length > 0 ? (
+                    <Button variant="outline" onClick={() => {
+                      setSearchTerm("");
+                      setStatusFilter("all");
+                    }}>
+                      Clear Filters
+                    </Button>
+                  ) : null
+                }
+              />
             )}
 
-            {filteredRoutes.map((route) => (
-              <Card
-                key={route.id}
-                className={`cursor-pointer transition-all duration-300 hover:shadow-glow ${selectedRoute === route.id ? 'ring-2 ring-primary shadow-glow' : 'bg-card/80 border-border/50'
-                  }`}
-                onClick={() => setSelectedRoute(route.id)}
-              >
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        {getStatusIcon(route.status)}
-                        <h3 className="text-xl font-bold">
-                          {route.name || `Route ${route.id.slice(0, 8)}`}
-                        </h3>
-                        <Badge className={`bg-${getStatusColor(route.status)}/20 text-${getStatusColor(route.status)}`}>
-                          {route.status}
-                        </Badge>
-                        {getTerritoryClaimStatusBadge(route)}
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-4 h-4" />
-                          {formatDate(route.created_at)}
-                        </span>
-                        {route.completed_at && (
-                          <span className="flex items-center gap-1">
-                            <Target className="w-4 h-4" />
-                            Completed {formatDate(route.completed_at)}
-                          </span>
-                        )}
-                      </div>
-                      {route.description && (
-                        <p className="text-sm text-muted-foreground">{route.description}</p>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedRoute(route.id);
-                        }}
-                        title="View route details"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenRouteMap(route);
-                        }}
-                        className="text-blue-600 hover:text-blue-700 border-blue-200 hover:border-blue-300"
-                        title="View route on map"
-                      >
-                        <Route className="w-4 h-4" />
-                      </Button>
-                      {route.territory_claim_status === "success" && route.territory_id && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleNavigateToTerritory(route.territory_id);
-                          }}
-                          className="text-green-600 hover:text-green-700 border-green-200 hover:border-green-300"
-                          title="View claimed territory"
-                        >
-                          <MapPin className="w-4 h-4" />
-                        </Button>
-                      )}
-                      {route.territory_claim_status === "failed" && route.stats.is_closed_loop && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRetryTerritoryClaimFromRoute(route);
-                          }}
-                          className="text-orange-600 hover:text-orange-700 border-orange-200 hover:border-orange-300"
-                          title="Retry territory claiming"
-                        >
-                          <RefreshCw className="w-4 h-4" />
-                        </Button>
-                      )}
-                      {route.status !== "active" && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setRouteToDelete({ id: route.id, name: route.name });
-                            setDeleteModalOpen(true);
-                          }}
-                          className="text-destructive hover:text-destructive"
-                          title="Delete route"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    {/* Basic Statistics */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Distance</p>
-                        <p className="font-semibold text-primary">{formatDistance(route.stats.distance_meters)}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Duration</p>
-                        <p className="font-semibold">{formatDuration(route.stats.duration_seconds)}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Points</p>
-                        <p className="font-semibold">{route.stats.coordinate_count ?? 0}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Territory</p>
-                        <p className="font-semibold text-territory-claimed">
-                          {route.stats.territory_area_km2
-                            ? `${route.stats.territory_area_km2.toFixed(2)} km²`
-                            : route.stats.is_closed_loop ? "Claimable" : "Open path"
-                          }
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Territory Impact Metrics */}
-                    {getTerritoryImpactMetrics(route).length > 0 && (
-                      <div className="border-t pt-3">
-                        <p className="text-sm text-muted-foreground mb-2">Territory Impact</p>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                          {getTerritoryImpactMetrics(route).map((metric, index) => (
-                            <div key={index} className="flex items-center gap-2">
-                              <span className={metric.color}>{metric.icon}</span>
-                              <div>
-                                <p className="text-xs text-muted-foreground">{metric.label}</p>
-                                <p className={`text-sm font-medium ${metric.color}`}>{metric.value}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Territory Claim Error */}
-                    {route.territory_claim_error && (
-                      <div className="border-t pt-3">
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                          <div className="flex items-start gap-2">
-                            <XCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
-                            <div>
-                              <p className="text-sm font-medium text-red-800">Territory Claim Failed</p>
-                              <p className="text-xs text-red-600 mt-1">
-                                {typeof route.territory_claim_error === 'string'
-                                  ? route.territory_claim_error
-                                  : route.territory_claim_error
-                                    ? JSON.stringify(route.territory_claim_error)
-                                    : 'Unknown error'
-                                }
-                              </p>
-                            </div>
+            <AnimatePresence>
+              {filteredRoutes.map((route, index) => (
+                <motion.div
+                  key={route.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                >
+                  <Card
+                    className={`cursor-pointer transition-all duration-300 hover:shadow-glow ${selectedRoute === route.id ? 'ring-2 ring-primary shadow-glow' : 'bg-card/80 border-border/50'
+                      }`}
+                    onClick={() => setSelectedRoute(route.id)}
+                  >
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            {getStatusIcon(route.status)}
+                            <h3 className="text-xl font-bold">
+                              {route.name || `Route ${route.id.slice(0, 8)}`}
+                            </h3>
+                            <Badge className={`bg-${getStatusColor(route.status)}/20 text-${getStatusColor(route.status)}`}>
+                              {route.status}
+                            </Badge>
+                            {getTerritoryClaimStatusBadge(route)}
                           </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* GPS Quality Issues */}
-                    {route.stats.coordinate_quality_issues && route.stats.coordinate_quality_issues.length > 0 && (
-                      <div className="border-t pt-3">
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                          <div className="flex items-start gap-2">
-                            <AlertTriangle className="w-4 h-4 text-yellow-500 mt-0.5 flex-shrink-0" />
-                            <div>
-                              <p className="text-sm font-medium text-yellow-800">GPS Quality Issues</p>
-                              <ul className="text-xs text-yellow-600 mt-1 space-y-1">
-                                {route.stats.coordinate_quality_issues.map((issue, index) => (
-                                  <li key={index}>• {issue}</li>
-                                ))}
-                              </ul>
-                            </div>
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-4 h-4" />
+                              {formatDate(route.created_at)}
+                            </span>
+                            {route.completed_at && (
+                              <span className="flex items-center gap-1">
+                                <Target className="w-4 h-4" />
+                                Completed {formatDate(route.completed_at)}
+                              </span>
+                            )}
                           </div>
+                          {route.description && (
+                            <p className="text-sm text-muted-foreground">{route.description}</p>
+                          )}
                         </div>
-                      </div>
-                    )}
-
-                    {/* Territory Navigation Quick Actions */}
-                    {route.stats.is_closed_loop && route.status === "completed" && (
-                      <div className="border-t pt-3">
-                        <div className="text-sm font-medium mb-2 flex items-center gap-2">
-                          <Target className="w-4 h-4 text-primary" />
-                          Territory Actions
-                        </div>
-                        <div className="flex gap-2 flex-wrap">
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedRoute(route.id);
+                            }}
+                            title="View route details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenRouteMap(route);
+                            }}
+                            className="text-blue-600 hover:text-blue-700 border-blue-200 hover:border-blue-300"
+                            title="View route on map"
+                          >
+                            <Route className="w-4 h-4" />
+                          </Button>
                           {route.territory_claim_status === "success" && route.territory_id && (
                             <Button
-                              size="sm"
                               variant="outline"
+                              size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleNavigateToTerritory(route.territory_id);
                               }}
                               className="text-green-600 hover:text-green-700 border-green-200 hover:border-green-300"
+                              title="View claimed territory"
                             >
-                              <MapPin className="w-4 h-4 mr-1" />
-                              View Territory
+                              <MapPin className="w-4 h-4" />
                             </Button>
                           )}
-                          {route.territory_claim_status === "failed" && (
+                          {route.territory_claim_status === "failed" && route.stats.is_closed_loop && (
                             <Button
-                              size="sm"
                               variant="outline"
+                              size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleRetryTerritoryClaimFromRoute(route);
                               }}
                               className="text-orange-600 hover:text-orange-700 border-orange-200 hover:border-orange-300"
+                              title="Retry territory claiming"
                             >
-                              <RefreshCw className="w-4 h-4 mr-1" />
-                              Retry Claim
+                              <RefreshCw className="w-4 h-4" />
                             </Button>
                           )}
-                          {route.territory_claim_status === "conflict" && (
+                          {route.status !== "active" && (
                             <Button
-                              size="sm"
                               variant="outline"
+                              size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                toast.info("Territory conflict detected", {
-                                  description: "View the route map to see conflict details"
-                                });
-                                handleOpenRouteMap(route);
+                                setRouteToDelete({ id: route.id, name: route.name });
+                                setDeleteModalOpen(true);
                               }}
-                              className="text-yellow-600 hover:text-yellow-700 border-yellow-200 hover:border-yellow-300"
+                              className="text-destructive hover:text-destructive"
+                              title="Delete route"
                             >
-                              <AlertTriangle className="w-4 h-4 mr-1" />
-                              View Conflict
-                            </Button>
-                          )}
-                          {!route.territory_claim_status && route.auto_claim_attempted === false && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRetryTerritoryClaimFromRoute(route);
-                              }}
-                              className="text-blue-600 hover:text-blue-700 border-blue-200 hover:border-blue-300"
-                            >
-                              <Target className="w-4 h-4 mr-1" />
-                              Claim Territory
+                              <Trash2 className="w-4 h-4" />
                             </Button>
                           )}
                         </div>
                       </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+
+                      <div className="space-y-4">
+                        {/* Basic Statistics */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Distance</p>
+                            <p className="font-semibold text-primary">{formatDistance(route.stats.distance_meters)}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">Duration</p>
+                            <p className="font-semibold">{formatDuration(route.stats.duration_seconds)}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">Points</p>
+                            <p className="font-semibold">{route.stats.coordinate_count ?? 0}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">Territory</p>
+                            <p className="font-semibold text-territory-claimed">
+                              {route.stats.territory_area_km2
+                                ? `${route.stats.territory_area_km2.toFixed(2)} km²`
+                                : route.stats.is_closed_loop ? "Claimable" : "Open path"
+                              }
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Territory Impact Metrics */}
+                        {getTerritoryImpactMetrics(route).length > 0 && (
+                          <div className="border-t pt-3">
+                            <p className="text-sm text-muted-foreground mb-2">Territory Impact</p>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                              {getTerritoryImpactMetrics(route).map((metric, index) => (
+                                <div key={index} className="flex items-center gap-2">
+                                  <span className={metric.color}>{metric.icon}</span>
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">{metric.label}</p>
+                                    <p className={`text-sm font-medium ${metric.color}`}>{metric.value}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Territory Claim Error */}
+                        {route.territory_claim_error && (
+                          <div className="border-t pt-3">
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                              <div className="flex items-start gap-2">
+                                <XCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                                <div>
+                                  <p className="text-sm font-medium text-red-800">Territory Claim Failed</p>
+                                  <p className="text-xs text-red-600 mt-1">
+                                    {typeof route.territory_claim_error === 'string'
+                                      ? route.territory_claim_error
+                                      : route.territory_claim_error
+                                        ? JSON.stringify(route.territory_claim_error)
+                                        : 'Unknown error'
+                                    }
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* GPS Quality Issues */}
+                        {route.stats.coordinate_quality_issues && route.stats.coordinate_quality_issues.length > 0 && (
+                          <div className="border-t pt-3">
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                              <div className="flex items-start gap-2">
+                                <AlertTriangle className="w-4 h-4 text-yellow-500 mt-0.5 flex-shrink-0" />
+                                <div>
+                                  <p className="text-sm font-medium text-yellow-800">GPS Quality Issues</p>
+                                  <ul className="text-xs text-yellow-600 mt-1 space-y-1">
+                                    {route.stats.coordinate_quality_issues.map((issue, index) => (
+                                      <li key={index}>• {issue}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Territory Navigation Quick Actions */}
+                        {route.stats.is_closed_loop && route.status === "completed" && (
+                          <div className="border-t pt-3">
+                            <div className="text-sm font-medium mb-2 flex items-center gap-2">
+                              <Target className="w-4 h-4 text-primary" />
+                              Territory Actions
+                            </div>
+                            <div className="flex gap-2 flex-wrap">
+                              {route.territory_claim_status === "success" && route.territory_id && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleNavigateToTerritory(route.territory_id);
+                                  }}
+                                  className="text-green-600 hover:text-green-700 border-green-200 hover:border-green-300"
+                                >
+                                  <MapPin className="w-4 h-4 mr-1" />
+                                  View Territory
+                                </Button>
+                              )}
+                              {route.territory_claim_status === "failed" && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRetryTerritoryClaimFromRoute(route);
+                                  }}
+                                  className="text-orange-600 hover:text-orange-700 border-orange-200 hover:border-orange-300"
+                                >
+                                  <RefreshCw className="w-4 h-4 mr-1" />
+                                  Retry Claim
+                                </Button>
+                              )}
+                              {route.territory_claim_status === "conflict" && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toast.info("Territory conflict detected", {
+                                      description: "View the route map to see conflict details"
+                                    });
+                                    handleOpenRouteMap(route);
+                                  }}
+                                  className="text-yellow-600 hover:text-yellow-700 border-yellow-200 hover:border-yellow-300"
+                                >
+                                  <AlertTriangle className="w-4 h-4 mr-1" />
+                                  View Conflict
+                                </Button>
+                              )}
+                              {!route.territory_claim_status && route.auto_claim_attempted === false && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRetryTerritoryClaimFromRoute(route);
+                                  }}
+                                  className="text-blue-600 hover:text-blue-700 border-blue-200 hover:border-blue-300"
+                                >
+                                  <Target className="w-4 h-4 mr-1" />
+                                  Claim Territory
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
 
           {/* Route Details Sidebar */}
@@ -742,6 +848,23 @@ const Routes = () => {
                                   Territory Area: {route.stats.territory_area_km2.toFixed(2)} km²
                                 </p>
                               )}
+                            </div>
+                          )}
+
+                          {/* Conquered Territory Preview */}
+                          {territoryData?.ok && (
+                            <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <MapPin className="w-4 h-4 text-green-600" />
+                                <span className="font-medium text-green-800">Conquered Territory</span>
+                              </div>
+                              <TerritoryPreview
+                                territoryData={territoryData}
+                                onViewFullMap={() => handleOpenRouteMap(route)}
+                              />
+                              <p className="text-xs text-green-600 mt-1">
+                                Territory claimed successfully! Use "View Territory" to see it on the full map.
+                              </p>
                             </div>
                           )}
 
@@ -845,20 +968,16 @@ const Routes = () => {
                 </CardContent>
               </Card>
             ) : (
-              <Card className="bg-card/80 border-border/50">
-                <CardContent className="p-6 text-center">
-                  <Route className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="font-semibold mb-2">Select a Route</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Click on a route to see detailed information and GPS tracking data.
-                  </p>
-                </CardContent>
-              </Card>
+              <EmptyState
+                Icon={Route}
+                title="Select a Route"
+                message="Click on a route from the list to see its detailed information and GPS data."
+              />
             )}
 
             {/* GPS Simulator (Development Only) */}
             {import.meta.env.MODE === 'development' && (
-              <GPSSimulator className="mb-6" />
+              <MemoizedGPSSimulator className="mb-6" />
             )}
 
             {/* Route Statistics */}
@@ -981,7 +1100,7 @@ const Routes = () => {
           territory_claim_error: routeMapModalData.territory_claim_error,
           auto_claim_attempted: routeMapModalData.auto_claim_attempted
         } : null}
-        coordinates={[]}
+        coordinates={routeMapDetail?.ok ? (routeMapDetail as any).data.coordinates : []}
       />
 
       {/* Territory Claim Retry Modal */}

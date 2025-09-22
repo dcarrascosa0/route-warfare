@@ -7,8 +7,8 @@ import type { Route, RouteDetail, StartRouteRequest, AddCoordinatesRequest, Comp
 import { normalizeRouteSummary, normalizeRouteDetail } from '../utils/data-normalizers.ts';
 
 export class RouteApiClient extends BaseApiClient {
-  async getRoutesForUser(userId: string, limit = 20) {
-    const res = await this.request<any[]>(`/routes/user/${encodeURIComponent(userId)}?limit=${limit}`);
+  async getRoutesForUser(userId: string, limit = 20, status = "all") {
+    const res = await this.request<any[]>(`/routes/user/${encodeURIComponent(userId)}?limit=${limit}&status=${status}`);
     if (res.ok && Array.isArray(res.data)) {
       return { ...res, data: res.data.map(normalizeRouteSummary) };
     }
@@ -22,22 +22,12 @@ export class RouteApiClient extends BaseApiClient {
     });
   }
 
-  async addCoordinates(routeId: string, userId: string, coordinates: AddCoordinatesRequest['coordinates']) {
-    return this.request<unknown>(`/routes/${encodeURIComponent(routeId)}/coordinates?user_id=${encodeURIComponent(userId)}`, {
-      method: "POST",
-      body: { coordinates },
-    });
+  async addCoordinates(routeId: string, userId: string, coordinates: any) {
+    return this.request(`/routes/${routeId}/coordinates?user_id=${userId}`, { method: 'POST', body: coordinates });
   }
 
-  async completeRoute(routeId: string, userId: string, completion: CompleteRouteRequest) {
-    const res = await this.request<any>(`/routes/${encodeURIComponent(routeId)}/complete?user_id=${encodeURIComponent(userId)}`, {
-      method: "POST",
-      body: completion,
-    });
-    if (res.ok && res.data) {
-      return { ...res, data: normalizeRouteDetail(res.data) };
-    }
-    return res;
+  async completeRoute(routeId: string, userId: string, payload: any) {
+    return this.request(`/routes/${routeId}/complete?user_id=${userId}`, { method: 'POST', body: payload });
   }
 
   async getActiveRoute(userId: string) {
@@ -87,6 +77,12 @@ export class RouteApiClient extends BaseApiClient {
     return this.request<unknown>(`/routes/${encodeURIComponent(routeId)}/coordinate?user_id=${encodeURIComponent(userId)}`, {
       method: "POST",
       body: coordinate
+    });
+  }
+
+  async cleanupStuckRoutes(userId: string, maxAgeMinutes: number = 30) {
+    return this.request<unknown>(`/routes/cleanup-stuck?user_id=${encodeURIComponent(userId)}&max_age_minutes=${encodeURIComponent(String(maxAgeMinutes))}`, {
+      method: "POST",
     });
   }
 }

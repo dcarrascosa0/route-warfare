@@ -21,8 +21,14 @@ export const TILE_LIGHT_WITH_LABELS = "https://{s}.basemaps.cartocdn.com/light_a
 export const TILE_VOYAGER = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
 export const TILE_POSITRON = "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png";
 
-// Orange-themed tile for better visibility - using OpenStreetMap with custom styling
+// Orange-themed tiles for better visibility with app theme
 export const TILE_ORANGE_STREETS = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+
+// High contrast light theme for better street visibility
+export const TILE_HIGH_CONTRAST_LIGHT = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+
+// OpenStreetMap bright - classic styling with good contrast
+export const TILE_OSM_BRIGHT = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 // Custom icons for different marker types
 export const createCustomIcon = (

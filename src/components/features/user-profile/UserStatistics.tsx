@@ -6,12 +6,11 @@ import {
   Route, 
   Shield, 
   Clock,
-  TrendingUp,
   Target,
   Award,
   MapPin
 } from "lucide-react";
-import { UserStatisticsProps, UserStats } from "./types";
+import { UserStatisticsProps } from "./types";
 
 export default function UserStatistics({ 
   stats, 

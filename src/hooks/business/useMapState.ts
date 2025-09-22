@@ -7,7 +7,7 @@ export interface MapViewState {
   showTerritoryPreview: boolean;
   selectedCoordinate: number | null;
   mapCenter: [number, number] | null;
-  mapBounds: any | null;
+  mapBounds: [number, number][] | null;
 }
 
 export interface MapControls {

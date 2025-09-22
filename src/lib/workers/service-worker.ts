@@ -29,8 +29,10 @@ export async function registerServiceWorker(config?: ServiceWorkerConfig): Promi
     return null;
   }
 
+  const swUrl = import.meta.env.DEV ? '/src/sw.ts' : '/sw.js';
+
   try {
-    const registration = await navigator.serviceWorker.register('/sw.js', {
+    const registration = await navigator.serviceWorker.register(swUrl, {
       scope: '/'
     });
 

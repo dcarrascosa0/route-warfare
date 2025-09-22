@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Territory, TerritoryEvent } from '@/types/territory';
 import { useTerritoryContext } from '@/contexts/TerritoryContext';
+import { useNotifications } from '@/hooks/useNotifications';
 
 interface TerritoryUpdate {
   territory: Territory;
@@ -11,7 +12,6 @@ interface TerritoryUpdate {
 
 interface UseTerritoryUpdatesOptions {
   animationDuration?: number;
-  showNotifications?: boolean;
 }
 
 interface UseTerritoryUpdatesReturn {
@@ -25,16 +25,13 @@ interface UseTerritoryUpdatesReturn {
 export const useTerritoryUpdates = (
   options: UseTerritoryUpdatesOptions = {}
 ): UseTerritoryUpdatesReturn => {
-  const {
-    animationDuration = 3000,
-    showNotifications = true,
-  } = options;
-
+  const { animationDuration = 3000 } = options;
   const { territories, lastUpdate } = useTerritoryContext();
   const [recentUpdates, setRecentUpdates] = useState<TerritoryUpdate[]>([]);
   const [animatingTerritories, setAnimatingTerritories] = useState<Set<string>>(new Set());
   const previousTerritoriesRef = useRef<Territory[]>([]);
   const timeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const { onTerritoryUpdate } = useNotifications();
 
   // Enhanced territory change detection with better update classification
   useEffect(() => {

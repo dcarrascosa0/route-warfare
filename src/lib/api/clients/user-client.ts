@@ -29,6 +29,14 @@ export class UserApiClient extends BaseApiClient {
   async getAchievementProgress(userId: string, achievementId: string) {
     return this.request<unknown>(`/users/${encodeURIComponent(userId)}/achievements/${encodeURIComponent(achievementId)}/progress`);
   }
+
+  async updateUserProfile(userId: string, profile: { username: string; email: string }) {
+    return this.request(`/users/${encodeURIComponent(userId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(profile),
+    });
+  }
 }
 
 export const userClient = new UserApiClient();

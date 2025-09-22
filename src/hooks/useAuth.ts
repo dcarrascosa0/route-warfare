@@ -3,6 +3,8 @@ import { GatewayAPI } from '@/lib/api';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth as useAuthContext } from '@/contexts/AuthContext';
+import { User } from '@/contexts/AuthContext';
+import { queryKeys } from '@/lib/query';
 
 // Re-export the useAuth hook from context for convenience
 export { useAuth } from '@/contexts/AuthContext';
@@ -55,28 +57,25 @@ export const useAuthMutation = () => {
 
 // Hook for fetching current user profile
 export const useCurrentUser = () => {
-  const auth = useAuthContext();
-
-  if (!auth) {
-    throw new Error('useCurrentUser must be used within an AuthProvider');
-  }
+  const { user, isAuthenticated, isLoading } = useAuthStatus();
 
   return useQuery({
-    queryKey: ['user', 'current'],
+    queryKey: queryKeys.me(),
     queryFn: async () => {
-      const response = await GatewayAPI.me();
-      if (!response.ok) {
-        throw new Error('Failed to fetch user profile');
+      // If auth says we're authenticated, but we don't have a user object, fetch it
+      if (isAuthenticated && !user) {
+        const response = await GatewayAPI.me();
+        if (response.ok) {
+          return response.data;
+        }
+        // This case might indicate a token issue. The AuthProvider will handle logout on failed refresh.
+        return null;
       }
-      return response.data;
+      return user;
     },
-    enabled: auth.isAuthenticated,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: (failureCount, error: any) => {
-      // Don't retry on 401 errors (authentication issues)
-      if (error?.status === 401) return false;
-      return failureCount < 3;
-    },
+    enabled: isAuthenticated && !user, // Only run if we think we're auth'd but are missing user data
+    staleTime: Infinity, // This data is stable within a session
+    initialData: user, // Seed with initial data from context
   });
 };
 
