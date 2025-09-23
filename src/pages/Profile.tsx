@@ -118,8 +118,43 @@ const Profile = () => {
   const statistics = userStats;
   const achievements = userAchievements;
 
-
-
+  // Generate recent activity from routes and territories
+  const recentActivity = useMemo(() => {
+    const activities: Array<{ id: string; type: string; description: string; time: string; points: string }> = [];
+    
+    // Add recent routes
+    if (Array.isArray(userRoutes)) {
+      userRoutes.slice(0, 5).forEach((route: any) => {
+        activities.push({
+          id: route.id,
+          type: route.status === 'completed' ? 'route' : 'route_active',
+          description: route.status === 'completed' 
+            ? `Completed route: ${route.name || `Route ${route.id.slice(0, 8)}`}`
+            : `Started route: ${route.name || `Route ${route.id.slice(0, 8)}`}`,
+          time: new Date(route.created_at).toLocaleDateString(),
+          points: route.stats?.territory_area_km2 ? `+${Math.round(route.stats.territory_area_km2 * 10)} pts` : '+0 pts'
+        });
+      });
+    }
+    
+    // Add recent territories
+    if (Array.isArray(userTerritories)) {
+      userTerritories.slice(0, 3).forEach((territory: any) => {
+        activities.push({
+          id: territory.id,
+          type: 'territory',
+          description: `Claimed territory: ${territory.name || `Territory ${territory.id.slice(0, 8)}`}`,
+          time: new Date(territory.claimed_at).toLocaleDateString(),
+          points: `+${Math.round(territory.area_km2 * 10)} pts`
+        });
+      });
+    }
+    
+    // Sort by most recent and limit to 5
+    return activities
+      .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+      .slice(0, 5);
+  }, [userRoutes, userTerritories]);
   // State for editable profile fields
   const [isEditing, setIsEditing] = useState(false);
   const [editedUsername, setEditedUsername] = useState(profile?.username || '');
@@ -188,43 +223,7 @@ const Profile = () => {
     }
   };
 
-  // Generate recent activity from routes and territories
-  const recentActivity = useMemo(() => {
-    const activities: Array<{ id: string; type: string; description: string; time: string; points: string }> = [];
-    
-    // Add recent routes
-    if (Array.isArray(userRoutes)) {
-      userRoutes.slice(0, 5).forEach((route: any) => {
-        activities.push({
-          id: route.id,
-          type: route.status === 'completed' ? 'route' : 'route_active',
-          description: route.status === 'completed' 
-            ? `Completed route: ${route.name || `Route ${route.id.slice(0, 8)}`}`
-            : `Started route: ${route.name || `Route ${route.id.slice(0, 8)}`}`,
-          time: new Date(route.created_at).toLocaleDateString(),
-          points: route.stats?.territory_area_km2 ? `+${Math.round(route.stats.territory_area_km2 * 10)} pts` : '+0 pts'
-        });
-      });
-    }
-    
-    // Add recent territories
-    if (Array.isArray(userTerritories)) {
-      userTerritories.slice(0, 3).forEach((territory: any) => {
-        activities.push({
-          id: territory.id,
-          type: 'territory',
-          description: `Claimed territory: ${territory.name || `Territory ${territory.id.slice(0, 8)}`}`,
-          time: new Date(territory.claimed_at).toLocaleDateString(),
-          points: `+${Math.round(territory.area_km2 * 10)} pts`
-        });
-      });
-    }
-    
-    // Sort by most recent and limit to 5
-    return activities
-      .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-      .slice(0, 5);
-  }, [userRoutes, userTerritories]);
+  
 
   // Calculate real statistics from API data
   const totalRoutes = Array.isArray(userRoutes) ? userRoutes.length : 0;
