@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MapPin, Trophy, Target, Filter, Search, Award } from "lucide-react";
+
 import { TerritoryMap } from "@/components/features/territory/TerritoryMap";
 import { TerritoryStats } from "@/components/features/territory/TerritoryStats";
 import { TerritoryLeaderboard } from "@/components/features/territory/TerritoryLeaderboard";
@@ -45,16 +46,34 @@ const Territory = () => {
 
   const territories = useMemo(() => {
     if (!territoriesData?.territories) return [];
-    return territoriesData.territories.map((t) => ({
-      ...t,
-      is_mine: t.owner_id === user?.id,
-      owner_name: t.owner_username || 'Unknown',
-      name: t.name || 'Unnamed Territory',
-      area_square_meters: t.area_km2 * 1000000,
-      contested: (t.contested_by?.length || 0) > 0,
-      contest_count: t.contest_count || 0,
-    }));
+    return territoriesData.territories.map((t) => {
+      // Handle API response that might have boundary instead of boundary_coordinates
+      const apiTerritory = t as any;
+      const boundaryCoordinates = apiTerritory.boundary_coordinates ||
+        (apiTerritory.boundary || []).map(([latitude, longitude]: [number, number]) => ({
+          latitude,
+          longitude
+        }));
+
+      return {
+        ...t,
+        is_mine: t.owner_id === user?.id,
+        owner_name: t.owner_username || 'Unknown',
+        name: t.name || 'Unnamed Territory',
+        area_square_meters: t.area_km2 * 1000000,
+        contested: (t.contested_by?.length || 0) > 0,
+        contest_count: t.contest_count || 0,
+        boundary_coordinates: boundaryCoordinates,
+      };
+    });
   }, [territoriesData, user?.id]);
+
+  console.log("Territory Page Debug:", {
+    userId: user?.id,
+    territoriesFromApi: territoriesData?.territories,
+    transformedTerritories: territories,
+    sampleBoundary: territories[0]?.boundary_coordinates?.slice(0, 3),
+  });
 
   // WebSocket integration for real-time territory updates
   const handleLeaderboardUpdate = useCallback((data: any) => {
@@ -182,9 +201,18 @@ const Territory = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="h-96">
+              <div className="h-[500px]">
                 {isLoadingTerritories ? (
                   <Skeleton className="w-full h-full" />
+                ) : territoriesError ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center space-y-2">
+                      <MapPin className="h-12 w-12 text-muted-foreground mx-auto" />
+                      <p className="text-muted-foreground">
+                        Failed to load territories. Please try again.
+                      </p>
+                    </div>
+                  </div>
                 ) : (
                   <TerritoryMap
                     territories={territories}

@@ -1,0 +1,200 @@
+/* Enhanced Territory Map Styling */
+
+/* Glass morphism territory polygons */
+.territory-polygon {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 0 8px currentColor);
+}
+
+.territory-polygon:hover {
+  filter: drop-shadow(0 0 15px currentColor) brightness(1.1);
+  transform: scale(1.02);
+}
+
+/* Owned territories with glowing effect */
+.territory-owned {
+  filter: drop-shadow(0 0 12px #f97316) brightness(1.05);
+  animation: territory-glow 2s ease-in-out infinite alternate;
+}
+
+.territory-owned:hover {
+  filter: drop-shadow(0 0 20px #f97316) brightness(1.15);
+  animation: territory-glow-intense 1s ease-in-out infinite alternate;
+}
+
+/* Contested territories with pulsing warning */
+.territory-contested {
+  filter: drop-shadow(0 0 10px #ff6b35) brightness(1.1);
+  animation: territory-pulse 1.5s ease-in-out infinite;
+}
+
+.territory-contested:hover {
+  filter: drop-shadow(0 0 18px #ff6b35) brightness(1.2);
+  animation: territory-pulse-intense 1s ease-in-out infinite;
+}
+
+/* Neutral territories with subtle glow */
+.territory-neutral {
+  filter: drop-shadow(0 0 6px #06b6d4) brightness(1.02);
+}
+
+.territory-neutral:hover {
+  filter: drop-shadow(0 0 12px #06b6d4) brightness(1.08);
+}
+
+/* Enhanced popup styling */
+.territory-popup .leaflet-popup-content-wrapper {
+  background: rgba(0, 0, 0, 0.8) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(249, 115, 22, 0.3) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 0 30px rgba(249, 115, 22, 0.3) !important;
+  padding: 0 !important;
+}
+
+.territory-popup .leaflet-popup-content {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.territory-popup .leaflet-popup-tip {
+  background: rgba(0, 0, 0, 0.8) !important;
+  border: 1px solid rgba(249, 115, 22, 0.3) !important;
+  box-shadow: 0 0 15px rgba(249, 115, 22, 0.2) !important;
+}
+
+/* Animation keyframes */
+@keyframes territory-glow {
+  0% {
+    filter: drop-shadow(0 0 8px #f97316) brightness(1.02);
+  }
+  100% {
+    filter: drop-shadow(0 0 16px #f97316) brightness(1.08);
+  }
+}
+
+@keyframes territory-glow-intense {
+  0% {
+    filter: drop-shadow(0 0 15px #f97316) brightness(1.1);
+  }
+  100% {
+    filter: drop-shadow(0 0 25px #f97316) brightness(1.2);
+  }
+}
+
+@keyframes territory-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px #ff6b35) brightness(1.05);
+    opacity: 1;
+  }
+  50% {
+    filter: drop-shadow(0 0 15px #ff6b35) brightness(1.15);
+    opacity: 0.8;
+  }
+}
+
+@keyframes territory-pulse-intense {
+  0%, 100% {
+    filter: drop-shadow(0 0 15px #ff6b35) brightness(1.15);
+    opacity: 1;
+  }
+  50% {
+    filter: drop-shadow(0 0 25px #ff6b35) brightness(1.25);
+    opacity: 0.9;
+  }
+}
+
+/* Map container enhancements */
+.territory-map-container {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.9) 0%, rgba(20, 20, 30, 0.95) 100%);
+  box-shadow: 
+    0 0 50px rgba(249, 115, 22, 0.1),
+    inset 0 0 100px rgba(0, 0, 0, 0.3);
+}
+
+.territory-map-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, 
+    transparent 0%, 
+    rgba(249, 115, 22, 0.05) 25%, 
+    transparent 50%, 
+    rgba(6, 182, 212, 0.05) 75%, 
+    transparent 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Enhanced empty state */
+.territory-empty-state {
+  background: linear-gradient(135deg, 
+    rgba(0, 0, 0, 0.8) 0%, 
+    rgba(20, 20, 30, 0.9) 50%, 
+    rgba(0, 0, 0, 0.8) 100%);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  border-radius: 16px;
+  box-shadow: 
+    0 0 40px rgba(249, 115, 22, 0.1),
+    inset 0 0 60px rgba(0, 0, 0, 0.3);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .territory-polygon {
+    filter: drop-shadow(0 0 6px currentColor);
+  }
+  
+  .territory-owned {
+    filter: drop-shadow(0 0 8px #f97316) brightness(1.03);
+  }
+  
+  .territory-contested {
+    filter: drop-shadow(0 0 8px #ff6b35) brightness(1.05);
+  }
+  
+  .territory-neutral {
+    filter: drop-shadow(0 0 4px #06b6d4) brightness(1.01);
+  }
+}
+
+/* Accessibility - reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .territory-polygon,
+  .territory-owned,
+  .territory-contested,
+  .territory-neutral {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .territory-polygon {
+    filter: none !important;
+    border-width: 3px !important;
+  }
+  
+  .territory-owned {
+    border-color: #ff8c00 !important;
+    background-color: rgba(255, 140, 0, 0.3) !important;
+  }
+  
+  .territory-contested {
+    border-color: #ff0000 !important;
+    background-color: rgba(255, 0, 0, 0.3) !important;
+  }
+  
+  .territory-neutral {
+    border-color: #00bfff !important;
+    background-color: rgba(0, 191, 255, 0.3) !important;
+  }
+}
