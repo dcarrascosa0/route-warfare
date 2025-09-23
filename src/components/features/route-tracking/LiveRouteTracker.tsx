@@ -81,23 +81,52 @@ export default function LiveRouteTracker({
     // WebSocket connection for real-time updates
     const { routeData, onRouteStatsUpdated } = useRealTimeRouteTracking(activeRouteFromQuery?.id);
 
-    // Prioritize tracker state when tracking is active
-    const activeRoute = tracker.isTracking
-        ? {
-            id: tracker.routeId,
-            coordinates: tracker.trackedCoordinates,
-            status: "active",
-            created_at: new Date(tracker.startedAt || Date.now()).toISOString(),
-            updated_at: new Date().toISOString(),
-            stats: {
-                // Combine local tracker stats with the latest from the WebSocket
+    // Prioritize tracker state when tracking is active, merging with backend data
+    const activeRoute = useMemo(() => {
+        const baseRoute = activeRouteFromQuery;
+
+        if (tracker.isTracking) {
+            const localStats = {
                 distance_meters: calculatePolylineDistance(tracker.trackedCoordinates),
                 duration_seconds: tracker.elapsedMs / 1000,
                 coordinate_count: tracker.trackedCoordinates.length,
-                ...routeData.stats, // This ensures is_closed_loop is included
-            }
+            };
+
+            // Merge stats: start with base, add WebSocket, then add most recent local stats.
+            // Preserve server-calculated fields like is_closed_loop from WebSocket stats.
+            const mergedStats = {
+                ...baseRoute?.stats,
+                ...routeData.stats,
+                ...localStats,
+                // Preserve important server-calculated fields
+                is_closed_loop: routeData.stats?.is_closed_loop ?? baseRoute?.stats?.is_closed_loop ?? false,
+            };
+
+            return {
+                ...baseRoute,
+                id: tracker.routeId,
+                coordinates: tracker.trackedCoordinates,
+                status: "active",
+                created_at: new Date(tracker.startedAt || Date.now()).toISOString(),
+                updated_at: new Date().toISOString(),
+                stats: mergedStats,
+            };
         }
-        : activeRouteFromQuery;
+
+        // If not tracking, but we have WS data, merge it into the query data.
+        if (!tracker.isTracking && baseRoute && routeData.stats) {
+            return {
+                ...baseRoute,
+                stats: {
+                    ...baseRoute.stats,
+                    ...routeData.stats,
+                },
+            };
+        }
+
+        // Otherwise, just use the data from the query
+        return baseRoute;
+    }, [activeRouteFromQuery, tracker.isTracking, tracker.routeId, tracker.trackedCoordinates, tracker.startedAt, tracker.elapsedMs, routeData.stats]);
 
 
     useEffect(() => {
@@ -282,12 +311,12 @@ export default function LiveRouteTracker({
     // Calculate comprehensive route statistics using WebSocket data when available
     const calculateRouteStats = () => {
         const coordinates = activeRoute?.coordinates || [];
-        
+
         // Use WebSocket stats if available, otherwise fall back to local calculation
         const wsStats = routeData.stats;
         const localStats = (activeRoute as any)?.stats || {};
         const stats = wsStats || localStats;
-        
+
         const elapsedSeconds = tracker.elapsedMs / 1000;
 
         // Distance calculation - prefer WebSocket data
@@ -367,12 +396,12 @@ export default function LiveRouteTracker({
     // Enhanced territory eligibility logic
     const getTerritoryEligibility = () => {
         const coordinateCount = activeRoute?.coordinates?.length || 0;
-        
+
         // Use WebSocket stats if available, otherwise fall back to local stats
         const wsStats = routeData.stats;
         const localStats = (activeRoute as any)?.stats;
         const stats = wsStats || localStats;
-        
+
         const distanceMeters = stats?.distance_meters || 0;
         const isClosedLoop = stats?.is_closed_loop || false;
 
@@ -565,9 +594,9 @@ export default function LiveRouteTracker({
                         <div className="flex flex-col items-center p-2 bg-muted/20 rounded">
                             <div className="flex items-center gap-1">
                                 <div className={`w-2 h-2 rounded-full ${routeStats.gps.quality === 'excellent' ? 'bg-green-500' :
-                                        routeStats.gps.quality === 'good' ? 'bg-blue-500' :
-                                            routeStats.gps.quality === 'fair' ? 'bg-yellow-500' :
-                                                routeStats.gps.quality === 'poor' ? 'bg-red-500' : 'bg-gray-500'
+                                    routeStats.gps.quality === 'good' ? 'bg-blue-500' :
+                                        routeStats.gps.quality === 'fair' ? 'bg-yellow-500' :
+                                            routeStats.gps.quality === 'poor' ? 'bg-red-500' : 'bg-gray-500'
                                     }`} />
                                 <span className="font-mono text-sm font-bold">{routeStats.gps.formatted}</span>
                             </div>

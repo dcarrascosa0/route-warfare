@@ -206,7 +206,7 @@ export default function EnhancedActiveRouteMap({
         {
             enableRealTime: territoryPreviewEnabled && territoryPreviewVisible,
             enableRoutePreview: territoryPreviewEnabled,
-            realTimeDebounce: 2000, // 2 second debounce for real-time updates
+            realTimeDebounce: 2000, // 2 second debounce for real-time updates (increased to prevent server overload)
             refetchInterval: 30000, // 30 second refresh for route preview
         }
     );
@@ -251,7 +251,7 @@ export default function EnhancedActiveRouteMap({
                 coordinates[0].longitude,
                 coordinates[coordinates.length - 1].latitude,
                 coordinates[coordinates.length - 1].longitude
-            ) < 50; // Within 50 meters
+            ) < 100; // Within 100 meters (increased threshold for better detection)
 
         return {
             distance,
@@ -382,14 +382,22 @@ export default function EnhancedActiveRouteMap({
     // Update territory preview when coordinates change significantly
     useEffect(() => {
         if (territoryPreviewEnabled && territoryPreviewVisible && enhancedCoordinates.length >= 3) {
-            // Debounce the update to avoid excessive API calls
-            const timeoutId = setTimeout(() => {
-                territoryPreview.updateRealTimePreview();
-            }, 2000);
+            // Check if route is now a closed loop for immediate update
+            const isClosedLoop = routeStats.isClosedLoop;
+            
+            if (isClosedLoop) {
+                // Immediate update for closed loops
+                territoryPreview.updateRealTimePreview(true);
+            } else {
+                // Debounce the update to avoid excessive API calls for open routes
+                const timeoutId = setTimeout(() => {
+                    territoryPreview.updateRealTimePreview();
+                }, 2000);
 
-            return () => clearTimeout(timeoutId);
+                return () => clearTimeout(timeoutId);
+            }
         }
-    }, [enhancedCoordinates.length, territoryPreviewEnabled, territoryPreviewVisible, territoryPreview]);
+    }, [enhancedCoordinates.length, routeStats.isClosedLoop, territoryPreviewEnabled, territoryPreviewVisible, territoryPreview]);
 
     // Refresh territory preview when territory updates are received via WebSocket
     useEffect(() => {

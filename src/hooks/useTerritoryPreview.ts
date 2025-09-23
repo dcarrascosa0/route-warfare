@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { GatewayAPI } from '@/lib/api';
 import type { TerritoryPreview, RealTimeTerritoryPreviewRequest } from '@/lib/api/types/territory-preview';
 import type { Coordinate } from '@/lib/api/types/common';
@@ -38,6 +38,7 @@ export function useRealTimeTerritoryPreview(options?: {
 }) {
   const { enabled = true, debounceMs = 1000 } = options || {};
   const queryClient = useQueryClient();
+  const [isCalculating, setIsCalculating] = useState(false);
 
   const mutation = useMutation({
     mutationFn: async (coordinates: Coordinate[]) => {
@@ -61,13 +62,25 @@ export function useRealTimeTerritoryPreview(options?: {
   });
 
   const calculatePreview = useCallback(
-    (coordinates: Coordinate[]) => {
-      if (!enabled || coordinates.length < 3) {
+    (coordinates: Coordinate[], immediate = false) => {
+      if (!enabled || coordinates.length < 3 || isCalculating) {
         return;
       }
-      mutation.mutate(coordinates);
+      
+      setIsCalculating(true);
+      
+      if (immediate) {
+        // Immediate calculation for closed loops
+        mutation.mutate(coordinates);
+      } else {
+        // Debounced calculation for open routes
+        mutation.mutate(coordinates);
+      }
+      
+      // Reset calculating flag after a delay
+      setTimeout(() => setIsCalculating(false), 1000);
     },
-    [enabled, mutation]
+    [enabled, mutation, isCalculating]
   );
 
   return {
@@ -152,9 +165,9 @@ export function useTerritoryPreviewManager(
   ]);
 
   // Auto-calculate real-time preview when coordinates change
-  const updateRealTimePreview = useCallback(() => {
+  const updateRealTimePreview = useCallback((immediate = false) => {
     if (enableRealTime && coordinates.length >= 3) {
-      realTimePreview.calculatePreview(coordinates);
+      realTimePreview.calculatePreview(coordinates, immediate);
     }
   }, [enableRealTime, coordinates, realTimePreview]);
 

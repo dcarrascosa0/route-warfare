@@ -123,11 +123,11 @@ export default function TerritoryPreview({
             console.warn('Failed to parse territory boundary GeoJSON:', error);
             return null;
         }
-    }, [preview?.boundary_geojson, preview?.is_valid]);
+    }, [activePreview?.boundary_geojson, activePreview?.is_valid]);
 
     // Calculate conflict styling
     const conflictStyling = useMemo(() => {
-        if (!preview?.conflicts?.length) {
+        if (!activePreview?.conflicts?.length) {
             return finalStyling;
         }
 
@@ -155,7 +155,7 @@ export default function TerritoryPreview({
         }
 
         return finalStyling;
-    }, [preview?.conflicts, finalStyling]);
+    }, [activePreview?.conflicts, finalStyling]);
 
     // Format area for display
     const formattedArea = useMemo(() => {
@@ -170,11 +170,11 @@ export default function TerritoryPreview({
         } else {
             return `${sqm.toFixed(0)} m²`;
         }
-    }, [preview?.area_square_meters]);
+    }, [activePreview?.area_square_meters]);
 
     // Generate tooltip content
     const tooltipContent = useMemo(() => {
-        if (!preview) return null;
+        if (!activePreview) return null;
 
         const parts = [];
 
@@ -195,7 +195,7 @@ export default function TerritoryPreview({
         }
 
         return parts.length > 0 ? parts.join('\n') : 'Territory Preview';
-    }, [preview, formattedArea]);
+    }, [activePreview, formattedArea]);
 
     // Handle pulse animation
     useEffect(() => {
@@ -212,13 +212,13 @@ export default function TerritoryPreview({
 
     // Handle preview click
     const handlePreviewClick = () => {
-        if (preview && onPreviewClick) {
-            onPreviewClick(preview);
+        if (activePreview && onPreviewClick) {
+            onPreviewClick(activePreview);
         }
     };
 
     // Don't render if not visible or no valid boundary
-    if (!visible || !boundaryCoordinates || !preview?.is_valid) {
+    if (!visible || !boundaryCoordinates || !activePreview?.is_valid) {
         return null;
     }
 
