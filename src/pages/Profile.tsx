@@ -6,11 +6,12 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  MapPin, 
-  Route, 
-  Trophy, 
-  Target, 
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  MapPin,
+  Route,
+  Trophy,
+  Target,
   Calendar,
   Activity,
   Crown,
@@ -19,6 +20,7 @@ import {
   Save,
   X
 } from "lucide-react";
+import { UnitsFormatter } from "@/lib/format/units";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys, invalidateQueries } from "@/lib/query";
 import { GatewayAPI, type ApiResult, type UserProfile, type UserStatistics, type Territory, type Route as ApiRoute, type UserAchievement } from "@/lib/api";
@@ -26,7 +28,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { UserStats, AchievementGrid } from "@/components/features/user-profile";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
+import { useWebSocketManager } from "@/hooks/useWebSocketManager";
 
 interface UserData {
   id: string;
@@ -41,11 +44,32 @@ interface UserData {
 
 
 const Profile = () => {
-  const { userId: paramUserId } = useParams<{ userId?: string }>();
+  const { user: paramUser, section: paramSection } = useParams<{ user?: string; section?: string }>();
   const { user: currentUser } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const resolvedUserId = paramUserId ?? currentUser?.id;
-  const isOwnProfile = !paramUserId;
+  const { onMessage } = useWebSocketManager({ autoConnect: true });
+  const resolvedUserId = (paramUser as string | undefined) ?? currentUser?.id;
+
+  // Real-time updates for profile data
+  useEffect(() => {
+    if (!resolvedUserId) return;
+    const subs: Array<() => void | undefined> = [];
+
+    subs.push(onMessage('route_completed', () => {
+      invalidateQueries.userProfile(queryClient, resolvedUserId);
+      invalidateQueries.routes(queryClient, resolvedUserId);
+    }));
+
+    subs.push(onMessage('territory_claimed', () => {
+      invalidateQueries.territories(queryClient, resolvedUserId);
+      invalidateQueries.territoryStatistics(queryClient, resolvedUserId);
+    }));
+
+    return () => { subs.forEach(off => off?.()); };
+  }, [onMessage, queryClient, resolvedUserId]);
+  const isOwnProfile = !paramUser;
+  const section = (paramSection as string | undefined) ?? "overview";
 
   const {
     data: profileData,
@@ -252,7 +276,7 @@ const Profile = () => {
     },
     {
       label: "Territory Area",
-      value: `${totalTerritoryArea.toFixed(1)} km²`,
+      value: UnitsFormatter.areaKm2(totalTerritoryArea),
       icon: Crown,
       color: "orange-500"
     }
@@ -417,81 +441,115 @@ const Profile = () => {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6 lg:space-y-8">
-            {/* Stats Overview */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-              {stats.map((stat, index) => {
-                const IconComponent = stat.icon;
-                return (
-                  <Card key={index} className="bg-card/80 border-border/50 hover:shadow-glow transition-all duration-300">
-                    <CardContent className="p-4 text-center">
-                      <div className={`flex items-center justify-center w-12 h-12 rounded-lg bg-${stat.color}/20 mx-auto mb-3`}>
-                        <IconComponent className={`w-6 h-6 text-${stat.color}`} />
-                      </div>
-                      <p className="text-2xl font-bold mb-1">{stat.value}</p>
-                      <p className="text-sm text-muted-foreground">{stat.label}</p>
+        <Tabs value={section} onValueChange={(v) => navigate(`/profile/${resolvedUserId}/${v}`)}>
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="achievements">Achievements</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+              {/* Main Content */}
+              <div className="lg:col-span-2 space-y-6 lg:space-y-8">
+                {/* Stats Overview */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+                  {stats.map((stat, index) => {
+                    const IconComponent = stat.icon;
+                    return (
+                      <Card key={index} className="bg-card/80 border-border/50 hover:shadow-glow transition-all duration-300">
+                        <CardContent className="p-4 text-center">
+                          <div className={`flex items-center justify-center w-12 h-12 rounded-lg bg-${stat.color}/20 mx-auto mb-3`}>
+                            <IconComponent className={`w-6 h-6 text-${stat.color}`} />
+                          </div>
+                          <p className="text-2xl font-bold mb-1">{stat.value}</p>
+                          <p className="text-sm text-muted-foreground">{stat.label}</p>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+
+                {/* Recent Activity */}
+                <Card className="bg-card/80 border-border/50">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Activity className="w-5 h-5 text-primary" />
+                      Recent Activity
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {recentActivity.length > 0 ? (
+                        recentActivity.map((activity) => (
+                          <div key={activity.id} className="flex items-center gap-4 p-3 rounded-lg bg-background/50">
+                            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-background/50">
+                              {getActivityIcon(activity.type)}
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-medium">{activity.description}</p>
+                              <p className="text-sm text-muted-foreground">{activity.time}</p>
+                            </div>
+                            <Badge className="bg-primary/20 text-primary">
+                              {activity.points}
+                            </Badge>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8">
+                          <Activity className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                          <h3 className="font-semibold mb-2">No Recent Activity</h3>
+                          <p className="text-sm text-muted-foreground">
+                            Start a route or claim territory to see your activity here!
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Performance Statistics */}
+                {statistics && (
+                  <Card className="bg-card/80 border-border/50">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Target className="w-5 h-5 text-primary" />
+                        Performance Statistics
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <UserStats statistics={statistics} />
                     </CardContent>
                   </Card>
-                );
-              })}
+                )}
+              </div>
+
+              {/* Sidebar */}
+              <div className="space-y-6">
+                <Card className="bg-card/80 border-border/50">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Quick Actions</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <Button className="w-full" variant="outline">
+                      <Route className="w-4 h-4 mr-2" />
+                      Start New Route
+                    </Button>
+                    <Button className="w-full" variant="outline">
+                      <Shield className="w-4 h-4 mr-2" />
+                      Defend Territory
+                    </Button>
+                    <Button className="w-full" variant="outline">
+                      <Trophy className="w-4 h-4 mr-2" />
+                      View Leaderboard
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
+          </TabsContent>
 
-            {/* Recent Activity */}
-            <Card className="bg-card/80 border-border/50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-primary" />
-                  Recent Activity
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {recentActivity.length > 0 ? (
-                    recentActivity.map((activity) => (
-                      <div key={activity.id} className="flex items-center gap-4 p-3 rounded-lg bg-background/50">
-                        <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-background/50">
-                          {getActivityIcon(activity.type)}
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-medium">{activity.description}</p>
-                          <p className="text-sm text-muted-foreground">{activity.time}</p>
-                        </div>
-                        <Badge className="bg-primary/20 text-primary">
-                          {activity.points}
-                        </Badge>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8">
-                      <Activity className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                      <h3 className="font-semibold mb-2">No Recent Activity</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Start a route or claim territory to see your activity here!
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Performance Statistics */}
-            {statistics && (
-              <Card className="bg-card/80 border-border/50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Target className="w-5 h-5 text-primary" />
-                    Performance Statistics
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <UserStats statistics={statistics} />
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Achievements */}
+          <TabsContent value="achievements">
             <Card className="bg-card/80 border-border/50">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -503,36 +561,21 @@ const Profile = () => {
                 <AchievementGrid achievements={achievements || []} />
               </CardContent>
             </Card>
-          </div>
+          </TabsContent>
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Progress - removed placeholder progress; can be derived from real stats later */}
-
-            {/* Territory Summary - removed mock stats */}
-
-            {/* Quick Actions */}
+          <TabsContent value="settings">
             <Card className="bg-card/80 border-border/50">
               <CardHeader>
-                <CardTitle className="text-lg">Quick Actions</CardTitle>
+                <CardTitle className="text-lg">Settings</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <Button className="w-full" variant="outline">
-                  <Route className="w-4 h-4 mr-2" />
-                  Start New Route
-                </Button>
-                <Button className="w-full" variant="outline">
-                  <Shield className="w-4 h-4 mr-2" />
-                  Defend Territory
-                </Button>
-                <Button className="w-full" variant="outline">
-                  <Trophy className="w-4 h-4 mr-2" />
-                  View Leaderboard
-                </Button>
+              <CardContent>
+                <div className="text-sm text-muted-foreground">
+                  Profile settings will be available here.
+                </div>
               </CardContent>
             </Card>
-          </div>
-        </div>
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

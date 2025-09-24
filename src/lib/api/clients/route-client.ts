@@ -85,6 +85,16 @@ export class RouteApiClient extends BaseApiClient {
       method: "POST",
     });
   }
+
+  async getRoutesForAllUsers() {
+    return this.request<Array<{
+      user_id: string;
+      username: string;
+      completed_routes: number;
+      total_routes: number;
+      win_rate: number;
+    }>>(`/routes/leaderboard-data`);
+  }
 }
 
 export const routeClient = new RouteApiClient();

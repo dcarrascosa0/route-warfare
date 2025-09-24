@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Achievement } from './types';
+import { Button } from '@/components/ui/button';
 
 interface AchievementGridProps {
   achievements: Achievement[];
@@ -216,6 +217,23 @@ const AchievementGrid = ({ achievements, className }: AchievementGridProps) => {
                   <p className="text-xs text-green-600 font-medium">
                     Unlocked {new Date(achievement.unlocked_at).toLocaleDateString()}
                   </p>
+                )}
+
+                {/* Track this goal */}
+                {!isUnlocked && (
+                  <div className="pt-1">
+                    <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => {
+                      try {
+                        const goals = JSON.parse(localStorage.getItem('tracked_goals') || '[]');
+                        if (!goals.find((g: any) => g === achievement.id)) {
+                          goals.push(achievement.id);
+                          localStorage.setItem('tracked_goals', JSON.stringify(goals));
+                        }
+                      } catch {}
+                    }}>
+                      Track this goal
+                    </Button>
+                  </div>
                 )}
               </div>
             </CardContent>

@@ -21,6 +21,7 @@ import {
   Target,
   Award
 } from 'lucide-react';
+import { UnitsFormatter } from '@/lib/format/units';
 
 interface Statistics {
   total_routes: number;
@@ -85,7 +86,7 @@ const UserStats = ({ statistics }: UserStatsProps) => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Territory Area</p>
-                <p className="text-xl font-bold">{(statistics.total_territory_area || statistics.total_territory_area_km2 || 0).toFixed(2)} km²</p>
+                <p className="text-xl font-bold">{UnitsFormatter.areaKm2(statistics.total_territory_area || statistics.total_territory_area_km2 || 0)}</p>
               </div>
             </div>
           </CardContent>

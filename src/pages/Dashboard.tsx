@@ -1,5 +1,6 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { GatewayAPI, type ApiResult, type UserStatistics, type Territory } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,11 +19,33 @@ import {
   Map
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { UnitsFormatter } from '@/lib/format/units';
 import { UserStats } from '@/components/features/user-profile';
-import { queryKeys } from '@/lib/query';
+import { queryKeys, invalidateQueries } from '@/lib/query';
+import { useWebSocketManager } from '@/hooks/useWebSocketManager';
 
 const Dashboard = () => {
   const { user, isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
+  const { onMessage } = useWebSocketManager({ autoConnect: true });
+
+  // Real-time updates for dashboard data
+  useEffect(() => {
+    if (!user?.id) return;
+    const subs: Array<() => void | undefined> = [];
+
+    subs.push(onMessage('route_completed', () => {
+      invalidateQueries.userProfile(queryClient, user.id);
+      invalidateQueries.routes(queryClient, user.id);
+    }));
+
+    subs.push(onMessage('territory_claimed', () => {
+      invalidateQueries.territories(queryClient, user.id);
+      invalidateQueries.territoryStatistics(queryClient, user.id);
+    }));
+
+    return () => { subs.forEach(off => off?.()); };
+  }, [onMessage, queryClient, user?.id]);
 
   // Fetch user profile and statistics (with graceful fallback)
   const { data: profile, isLoading: profileLoading, error: profileError } = useQuery({
@@ -161,7 +184,7 @@ const Dashboard = () => {
               ) : (
                 <>
                   <div className="text-2xl font-bold">
-                    {statistics?.total_territory_area_km2?.toFixed(2) || '0'} km²
+                    {UnitsFormatter.areaKm2(statistics?.total_territory_area_km2 || 0)}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {statistics?.total_territories || 0} zones claimed
@@ -327,7 +350,7 @@ const Dashboard = () => {
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {territory.area_km2.toFixed(2)} km²
+                    {UnitsFormatter.areaKm2(territory.area_km2)}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Claimed {new Date(territory.claimed_at).toLocaleDateString()}

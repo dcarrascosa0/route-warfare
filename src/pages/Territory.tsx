@@ -1,17 +1,19 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { UnitsFormatter } from "@/lib/format/units";
 
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MapPin, Trophy, Target, Filter, Search, Award } from "lucide-react";
+import { MapPin, Trophy, Target } from "lucide-react";
+import { FilterBar } from "@/components/common/FilterBar";
 
 import { TerritoryMap } from "@/components/features/territory/TerritoryMap";
 import { TerritoryStats } from "@/components/features/territory/TerritoryStats";
-import { TerritoryLeaderboard } from "@/components/features/territory/TerritoryLeaderboard";
-import { TerritoryAchievements } from "@/components/features/territory/TerritoryAchievements";
+// Removed full leaderboard from Territory page to reduce redundancy
 import { useGlobalTerritoryWebSocket } from "@/hooks/useTerritoryWebSocket";
+import { useWebSocketManager } from "@/hooks/useWebSocketManager";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys, invalidateQueries } from "@/lib/query";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useTerritoriesMap,
@@ -82,17 +84,44 @@ const Territory = () => {
     }
   }, []);
 
+  const queryClient = useQueryClient();
   const handleTerritoryMapUpdate = useCallback((data: any) => {
-    if (data.requires_refresh) {
-      // Trigger territory map refresh - handled by individual components
-      console.log('Territory map update received:', data);
+    if (data?.requires_refresh) {
+      // Invalidate territory-related queries for immediate refresh
+      queryClient.invalidateQueries({ queryKey: queryKeys.territoriesMap() });
+      if (user?.id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.userTerritories(user.id) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.territoryStatistics(user.id) });
+      }
     }
-  }, []);
+  }, [queryClient, user?.id]);
 
   const { isConnected: isGlobalConnected } = useGlobalTerritoryWebSocket({
     onLeaderboardUpdate: handleLeaderboardUpdate,
     onTerritoryMapUpdate: handleTerritoryMapUpdate,
   });
+
+  // Also subscribe to notification WS for territory and route events to invalidate caches
+  const { onMessage } = useWebSocketManager({ autoConnect: true });
+  useEffect(() => {
+    const subs: Array<() => void | undefined> = [];
+    subs.push(onMessage('territory_claimed', () => {
+      if (user?.id) {
+        invalidateQueries.territories(queryClient, user.id);
+        invalidateQueries.territoryStatistics(queryClient, user.id);
+      }
+    }));
+    subs.push(onMessage('leaderboard_update', () => {
+      // Force leaderboard refetch; handled by hooks via keys
+      // No direct key here; rely on socket integration already updating state
+    }));
+    subs.push(onMessage('route_completed', () => {
+      if (user?.id) {
+        invalidateQueries.routes(queryClient, user.id);
+      }
+    }));
+    return () => { subs.forEach(off => off?.()); };
+  }, [onMessage, queryClient, user?.id]);
 
   const currentLeaderboard = useMemo(() => {
     return leaderboardData || leaderboardQueryData?.leaderboard || [];
@@ -104,6 +133,23 @@ const Territory = () => {
 
   const handleLeaderboardSortChange = (newSort: string) => {
     setSortBy(newSort);
+  };
+
+  // Sync tab with URL: /territory/map | /territory/stats
+  const [activeTab, setActiveTab] = useState<string>(() => (window.location.pathname.endsWith('/stats') ? 'stats' : 'map'));
+
+  useEffect(() => {
+    const path = window.location.pathname;
+    const nextTab = path.endsWith('/stats') ? 'stats' : 'map';
+    setActiveTab(nextTab);
+  }, []);
+
+  const handleTabChange = (val: string) => {
+    setActiveTab(val);
+    const target = val === 'stats' ? '/territory/stats' : '/territory/map';
+    if (window.location.pathname !== target) {
+      window.history.replaceState(null, '', target);
+    }
   };
 
   return (
@@ -137,15 +183,15 @@ const Territory = () => {
             {isLoadingUserStats ? (
               <Skeleton className="h-4 w-12" />
             ) : (
-              `${userStats?.total_area_km2?.toFixed(2) ?? 0} km² Claimed`
+              `${UnitsFormatter.areaKm2(userStats?.total_area_km2 ?? 0)} Claimed`
             )}
           </Badge>
         </div>
       </div>
 
       {/* Main Content Tabs */}
-      <Tabs defaultValue="map" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="map" className="flex items-center gap-2">
             <MapPin className="h-4 w-4" />
             Territory Map
@@ -153,14 +199,6 @@ const Territory = () => {
           <TabsTrigger value="stats" className="flex items-center gap-2">
             <Trophy className="h-4 w-4" />
             Statistics
-          </TabsTrigger>
-          <TabsTrigger value="leaderboard" className="flex items-center gap-2">
-            <Target className="h-4 w-4" />
-            Leaderboard
-          </TabsTrigger>
-          <TabsTrigger value="achievements" className="flex items-center gap-2">
-            <Award className="h-4 w-4" />
-            Achievements
           </TabsTrigger>
         </TabsList>
 
@@ -175,29 +213,20 @@ const Territory = () => {
                     View and manage your claimed territories
                   </CardDescription>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <div className="relative">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search territories..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-8 w-64"
-                    />
-                  </div>
-                  <Select value={filterBy} onValueChange={setFilterBy}>
-                    <SelectTrigger className="w-32">
-                      <Filter className="h-4 w-4 mr-2" />
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="mine">My Territories</SelectItem>
-                      <SelectItem value="contested">Contested</SelectItem>
-                      <SelectItem value="nearby">Nearby</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <FilterBar
+                  search={{ value: searchTerm, onChange: setSearchTerm, placeholder: "Search territories..." }}
+                  selects={[{
+                    id: 'filterBy',
+                    value: filterBy,
+                    onChange: setFilterBy,
+                    options: [
+                      { value: 'all', label: 'All' },
+                      { value: 'mine', label: 'My Territories' },
+                      { value: 'contested', label: 'Contested' },
+                      { value: 'nearby', label: 'Nearby' },
+                    ]
+                  }]}
+                />
               </div>
             </CardHeader>
             <CardContent>
@@ -236,58 +265,21 @@ const Territory = () => {
             onSortChange={handleLeaderboardSortChange}
             isLoading={isLoadingLeaderboard}
           />
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-primary" />
+                Explore Full Leaderboard
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <a href="/leaderboard" className="inline-flex items-center px-4 py-2 rounded-md bg-gradient-hero text-white hover:shadow-glow">
+                View Leaderboard
+              </a>
+            </CardContent>
+          </Card>
         </TabsContent>
 
-        {/* Enhanced Leaderboard Tab */}
-        <TabsContent value="leaderboard" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <TerritoryLeaderboard
-                userId={user?.id}
-                showAchievements={true}
-              />
-            </div>
-            <div>
-              <TerritoryStats
-                leaderboard={currentLeaderboard}
-                sortBy={sortBy}
-                onSortChange={handleLeaderboardSortChange}
-                compact={true}
-                isLoading={isLoadingLeaderboard}
-              />
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* Achievements Tab */}
-        <TabsContent value="achievements" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <TerritoryAchievements
-              userId={user?.id || ''}
-              showProgress={true}
-            />
-            <div className="space-y-4">
-              <TerritoryLeaderboard
-                userId={user?.id}
-                compact={true}
-                showAchievements={false}
-              />
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Achievement Tips</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    <p>🏆 <strong>Area Achievements:</strong> Claim larger territories by completing longer routes</p>
-                    <p>📊 <strong>Count Achievements:</strong> Focus on claiming multiple smaller territories</p>
-                    <p>⚡ <strong>Efficiency Achievements:</strong> Optimize your routes for maximum territory per completion</p>
-                    <p>👑 <strong>Special Achievements:</strong> Complete unique challenges and milestones</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </TabsContent>
       </Tabs>
     </div>
   );

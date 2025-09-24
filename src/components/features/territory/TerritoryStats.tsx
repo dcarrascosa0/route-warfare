@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { UnitsFormatter } from "@/lib/format/units";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -164,11 +165,11 @@ const TerritoryStatsContent = ({
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Total Claimed Area</span>
-            {isLoading ? <Skeleton className="h-5 w-20" /> : <strong>{(stats as any)?.total_area_km2?.toLocaleString() ?? 0} km²</strong>}
+            {isLoading ? <Skeleton className="h-5 w-20" /> : <strong>{UnitsFormatter.areaKm2((stats as any)?.total_area_km2 ?? 0)}</strong>}
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Average Territory Size</span>
-            {isLoading ? <Skeleton className="h-5 w-20" /> : <strong>{(stats as any)?.average_area_km2?.toLocaleString() ?? 0} km²</strong>}
+            {isLoading ? <Skeleton className="h-5 w-20" /> : <strong>{UnitsFormatter.areaKm2((stats as any)?.average_area_km2 ?? 0)}</strong>}
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Total Territories</span>

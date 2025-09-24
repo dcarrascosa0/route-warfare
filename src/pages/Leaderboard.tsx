@@ -10,6 +10,7 @@ import { LeaderboardEntry } from "../components/features/user-profile/Leaderboar
 import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { useWebSocketManager } from "../hooks/useWebSocketManager";
+import { useGlobalControls } from "@/contexts/GlobalControlsContext";
 
 type LeaderboardCategory = "territory" | "routes" | "winrate";
 type LeaderboardPeriod = "ALL_TIME" | "WEEKLY" | "MONTHLY";
@@ -35,13 +36,19 @@ interface LeaderboardPlayer {
 
 const Leaderboard = () => {
   const [selectedCategory, setSelectedCategory] = useState<LeaderboardCategory>("territory");
-  const [selectedPeriod, setSelectedPeriod] = useState<LeaderboardPeriod>("ALL_TIME");
+  const { period } = useGlobalControls();
+  const selectedPeriod: LeaderboardPeriod = period as any;
   const [searchQuery, setSearchQuery] = useState("");
   const [pageSize, setPageSize] = useState(20);
   const [currentPage, setCurrentPage] = useState(0);
 
   const queryClient = useQueryClient();
   const { onMessage } = useWebSocketManager({ autoConnect: true });
+
+  // Function to refresh total players count
+  const refreshTotalPlayers = () => {
+    queryClient.invalidateQueries({ queryKey: ["total-players"] });
+  };
 
   const userId = useMemo(() => localStorage.getItem("user_id"), []);
   const isAuthenticated = !!userId;
@@ -55,6 +62,7 @@ const Leaderboard = () => {
     const cleanup = onMessage('leaderboard_updated', () => {
       queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
       queryClient.invalidateQueries({ queryKey: ["leaderboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["total-players"] });
     });
     return cleanup;
   }, [onMessage, queryClient]);
@@ -75,30 +83,89 @@ const Leaderboard = () => {
     },
   });
 
-  // Fetch leaderboard stats
+  // Fetch total players count using the new dedicated endpoint
+  const { data: totalPlayersData } = useQuery({
+    queryKey: ["total-players"],
+    queryFn: () => GatewayAPI.getTotalPlayers(),
+  });
+
+  // Fetch leaderboard stats (keeping for other stats if needed)
   const { data: statsData } = useQuery({
     queryKey: ["leaderboard-stats", selectedCategory],
     queryFn: () => GatewayAPI.leaderboardStats(selectedCategory),
     enabled: !!selectedCategory,
   });
 
+  // Fetch routes data for all users to populate the routes field
+  const { data: routesData } = useQuery({
+    queryKey: ["routes-leaderboard"],
+    queryFn: () => GatewayAPI.getRoutesForAllUsers(),
+    enabled: selectedCategory === "territory" || selectedCategory === "routes" || selectedCategory === "winrate",
+  });
+
+  // Debug: Log routes data when received
+  useEffect(() => {
+    if (routesData && selectedCategory === "routes") {
+      console.log('Routes data received for routes category:', routesData);
+    }
+  }, [routesData, selectedCategory]);
+
   // Get current user info for highlighting
   const currentUsername = "testuser"; // This would come from user context in a real app
 
+  // Create a map of route data for quick lookup
+  const routeDataMap = useMemo(() => {
+    // Handle both ApiResult wrapper and direct array response
+    let routes: any[] = [];
+
+    if (routesData) {
+      // Check if it's an ApiResult wrapper
+      if (typeof routesData === 'object' && 'data' in routesData) {
+        routes = Array.isArray(routesData.data) ? routesData.data : [];
+      } else if (Array.isArray(routesData)) {
+        // Direct array response
+        routes = routesData;
+      }
+    }
+
+    const routeMap: Record<string, { completed_routes: number; total_routes: number; win_rate: number }> = {};
+
+    // Debug: Log the routes data structure
+    if (routesData && routes.length > 0) {
+      console.log('Routes data received:', routes);
+    }
+
+    if (Array.isArray(routes)) {
+      routes.forEach((route: any) => {
+        if (route.user_id) {
+          routeMap[route.user_id] = {
+            completed_routes: route.completed_routes || 0,
+            total_routes: route.total_routes || 0,
+            win_rate: route.win_rate || 0
+          };
+        }
+      });
+    }
+
+    // Debug: Log the created route map
+    if (Object.keys(routeMap).length > 0) {
+      console.log('Route data map created:', routeMap);
+    }
+
+    return routeMap;
+  }, [routesData]);
+
   const allPlayers = useMemo(() => {
-    const entries = (apiData as any)?.data?.entries as Array<{
+    // Handle both data structures: apiData.entries (from leaderboard API) and apiData.data.entries (legacy)
+    const entries = (apiData as any)?.entries || (apiData as any)?.data?.entries as Array<{
       username?: string;
       user_id?: string;
       rank?: number;
       score?: number;
-      user_stats?: {
-        total_area_km2?: number;
-        zones?: number;
-        routes?: number;
-        win_rate?: number;
-        level?: number;
-        total_distance?: number;
-      };
+      territory_area_km2?: number;
+      territory_count?: number;
+      avg_territory_size?: number;
+      recent_claims?: number;
     }> | undefined;
 
     if (!entries || entries.length === 0) {
@@ -107,24 +174,35 @@ const Leaderboard = () => {
 
     return entries.map((e, idx) => {
       const globalRank = (currentPage * pageSize) + idx + 1;
+      const routeData = routeDataMap[e.user_id || ''] || { completed_routes: 0, total_routes: 0, win_rate: 0 };
+
+      // Debug: Log route data for each user when routes category is selected
+      if (selectedCategory === "routes" && e.user_id) {
+        console.log(`User ${e.user_id} (${e.username}):`, {
+          completed_routes: routeData.completed_routes,
+          total_routes: routeData.total_routes,
+          win_rate: routeData.win_rate
+        });
+      }
+
       return {
         rank: e.rank ?? globalRank,
         name: e.username ?? `Player ${globalRank}`,
         userId: e.user_id,
         score: e.score ?? 0,
-        totalArea: `${Math.max(0, Math.round((((e.user_stats?.total_area_km2 as number | undefined) ?? 0) * 10)) / 10)} km²`,
-        zones: e.user_stats?.zones ?? 0,
-        routes: e.user_stats?.routes ?? 0,
-        winRate: `${Math.round(e.user_stats?.win_rate ?? 0)}%`,
-        level: e.user_stats?.level ?? 1,
-        distance: `${((e.user_stats?.total_distance ?? 0) / 1000).toFixed(1)} km`,
+        totalArea: `${Math.max(0, Math.round(((e.territory_area_km2 ?? 0) * 10)) / 10)} km²`,
+        zones: e.territory_count ?? 0,
+        routes: routeData.completed_routes,
+        winRate: `${Math.round(routeData.win_rate)}%`,
+        level: 1, // This should come from user profile/gamification data
+        distance: `0.0 km`, // This should come from route statistics
         trend: Math.random() > 0.5 ? "up" : Math.random() > 0.5 ? "down" : "stable" as "up" | "down" | "stable",
         rankChange: Math.floor(Math.random() * 10) + 1,
         badge: globalRank === 1 ? "Crown" : globalRank === 2 ? "Trophy" : globalRank === 3 ? "Medal" : null,
         isCurrentUser: e.user_id === userId,
       } as LeaderboardPlayer;
     });
-  }, [apiData, selectedCategory, currentUsername, currentPage, pageSize, userId]);
+  }, [apiData, selectedCategory, currentUsername, currentPage, pageSize, userId, routeDataMap]);
 
   // Filter players based on search query
   const filteredPlayers = useMemo(() => {
@@ -136,7 +214,40 @@ const Leaderboard = () => {
     );
   }, [allPlayers, searchQuery]);
 
-  const topPlayers = filteredPlayers;
+  // Debug: Log filtered players for routes category
+  useMemo(() => {
+    if (selectedCategory === "routes" && filteredPlayers.length > 0) {
+      console.log('Filtered players for routes category:', filteredPlayers.map(p => ({
+        name: p.name,
+        userId: p.userId,
+        routes: p.routes,
+        winRate: p.winRate
+      })));
+    }
+  }, [filteredPlayers, selectedCategory]);
+
+  // Pin current user row at top if present
+  const topPlayers = useMemo(() => {
+    const idx = filteredPlayers.findIndex(p => p.isCurrentUser);
+    if (idx <= 0) return filteredPlayers;
+    const self = filteredPlayers[idx];
+    const others = filteredPlayers.filter((_, i) => i !== idx);
+    return [self, ...others];
+  }, [filteredPlayers]);
+
+  // Debug: Log final top players for routes category
+  useMemo(() => {
+    if (selectedCategory === "routes" && topPlayers.length > 0) {
+      console.log('Final top players for routes category:', topPlayers.map(p => ({
+        name: p.name,
+        userId: p.userId,
+        routes: p.routes,
+        winRate: p.winRate,
+        zones: p.zones,
+        totalArea: p.totalArea
+      })));
+    }
+  }, [topPlayers, selectedCategory]);
 
 
 
@@ -213,22 +324,13 @@ const Leaderboard = () => {
           {/* Period Selection and Filters */}
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
             <div className="flex flex-wrap gap-2">
-              {periods.map((period) => {
-                const IconComponent = period.icon;
-                const isSelected = selectedPeriod === period.id;
+              {periods.map((p) => {
+                const IconComponent = p.icon;
+                const isSelected = selectedPeriod === p.id;
                 return (
-                  <Button
-                    key={period.id}
-                    variant={isSelected ? "secondary" : "ghost"}
-                    size="sm"
-                    onClick={() => {
-                      setSelectedPeriod(period.id);
-                      setCurrentPage(0); // Reset to first page when changing period
-                    }}
-                    className="flex items-center gap-1"
-                  >
+                  <Button key={p.id} variant={isSelected ? "secondary" : "ghost"} size="sm" className="flex items-center gap-1">
                     <IconComponent className="w-3 h-3" />
-                    {period.label}
+                    {p.label}
                   </Button>
                 );
               })}
@@ -375,13 +477,24 @@ const Leaderboard = () => {
             {/* Leaderboard Stats */}
             <Card className="bg-card/80 border-border/50">
               <CardHeader>
-                <CardTitle className="text-lg">Leaderboard Stats</CardTitle>
+                <CardTitle className="flex items-center justify-between text-lg">
+                  <span>Leaderboard Stats</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={refreshTotalPlayers}
+                    className="h-6 w-6 p-0"
+                    title="Refresh player count"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                  </Button>
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="text-center p-3 bg-background/50 rounded-lg">
                     <p className="text-2xl font-bold text-primary">
-                      {(statsData as any)?.data?.total_players || 0}
+                      {totalPlayersData?.data?.total_players ?? 0}
                     </p>
                     <p className="text-xs text-muted-foreground">Total Players</p>
                   </div>

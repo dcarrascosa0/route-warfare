@@ -6,10 +6,9 @@ import { BaseApiClient } from './base-client';
 import type { 
   LeaderboardResponse, 
   LeaderboardStats, 
-  TerritoryLeaderboardCategory,
-  TerritoryLeaderboardEntry,
-  TerritoryAchievement
-} from '../types';
+  LeaderboardEntry
+} from '../types/leaderboard';
+import type { TerritoryAchievement } from '../types';
 
 export class LeaderboardApiClient extends BaseApiClient {
   async getLeaderboard(category: string = "territory", period: string = "ALL_TIME", start = 0, limit = 50) {
@@ -51,25 +50,27 @@ export class LeaderboardApiClient extends BaseApiClient {
       'routes': 'routes_completed',
       'winrate': 'win_rate'
     };
-    
+
     const backendCategory = categoryMap[category] || category;
     return this.request<LeaderboardStats>(`/leaderboard/stats/${backendCategory}`);
   }
 
-  // Territory-specific leaderboard methods
-  async getTerritoryLeaderboard(category: TerritoryLeaderboardCategory, period: string = "ALL_TIME", start = 0, limit = 50) {
-    return this.request<{ entries: TerritoryLeaderboardEntry[]; total_count: number; period: string; category: string }>(
-      `/leaderboard/${category}?period=${String(period).toLowerCase()}&start=${start}&limit=${limit}`
-    );
+  async getTotalPlayers() {
+    return this.request<{ total_players: number }>(`/leaderboard/players/total`);
+  }
+
+  // Territory-specific leaderboard methods (backward compatibility)
+  async getTerritoryLeaderboard(category: string, period: string = "ALL_TIME", start = 0, limit = 50) {
+    return this.getLeaderboard(category, period, start, limit);
   }
 
   async getTerritoryAchievements(userId: string) {
     return this.request<{ achievements: TerritoryAchievement[] }>(`/users/${userId}/achievements`);
   }
 
-  async getTerritoryLeaderboardWithAchievements(category: TerritoryLeaderboardCategory, period: string = "ALL_TIME", start = 0, limit = 50) {
+  async getTerritoryLeaderboardWithAchievements(category: string, period: string = "ALL_TIME", start = 0, limit = 50) {
     return this.request<{
-      entries: TerritoryLeaderboardEntry[];
+      entries: LeaderboardEntry[];
       total_count: number;
       period: string;
       category: string;

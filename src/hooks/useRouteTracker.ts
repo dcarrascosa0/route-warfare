@@ -18,12 +18,15 @@ type StartOptions = {
 
 interface UseRouteTrackerResult {
   isTracking: boolean;
+  isPaused: boolean;
   startedAt: number | null;
   elapsedMs: number;
   routeId: string | null;
   currentLocation: GeolocationPosition | null;
   trackedCoordinates: CoordinateInput[];
   start: (opts?: StartOptions) => Promise<boolean>;
+  pause: () => Promise<void>;
+  resume: () => Promise<void>;
   stop: (completeAndClaim?: boolean, name?: string) => Promise<boolean>;
   cancel: () => Promise<boolean>;
   cleanup: () => void;
@@ -71,6 +74,7 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [isTracking, setIsTracking] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentLocation, setCurrentLocation] = useState<GeolocationPosition | null>(null);
   const [trackedCoordinates, setTrackedCoordinates] = useState<CoordinateInput[]>([]);
@@ -82,6 +86,7 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
   const simHandlerRef = useRef<((e: Event) => void) | null>(null);
   const routeIdRef = useRef<string | null>(null);
   const userIdRef = useRef<string | null>(null);
+  const startWatcherRef = useRef<((highAccuracy?: boolean) => void) | null>(null);
 
   useEffect(() => {
     routeIdRef.current = routeId;
@@ -287,7 +292,7 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
         // Check for GPS Simulator events
         document.addEventListener("gps-sim-update", onSimulatedPosition);
 
-        const startWatcher = (highAccuracy = true) => {
+      const begin = (highAccuracy = true) => {
           if (watchIdRef.current !== null) {
             navigator.geolocation.clearWatch(watchIdRef.current);
           }
@@ -297,9 +302,7 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
               handleSuccess,
               (error) => {
                 // If high accuracy fails, try with low accuracy
-                if (highAccuracy) {
-                  startWatcher(false);
-                }
+                if (highAccuracy) begin(false);
                 handleError(error);
               },
               {
@@ -314,9 +317,8 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
           }
         };
 
-        if (isTracking) {
-          startWatcher();
-        }
+        startWatcherRef.current = begin;
+        if (isTracking) begin();
       } else {
         setError("Geolocation is not supported in this browser");
         return false;
@@ -328,6 +330,35 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
       return false;
     }
   }, [userId, flushBatch, isTracking]);
+
+  const pause = useCallback(async () => {
+    if (!isTracking || isPaused) return;
+    if (tickTimerRef.current != null) {
+      clearInterval(tickTimerRef.current);
+      tickTimerRef.current = null;
+    }
+    if (watchIdRef.current != null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    setIsPaused(true);
+  }, [isTracking, isPaused]);
+
+  const resume = useCallback(async () => {
+    if (!isTracking || !isPaused) return;
+    // restart timer
+    const startTime = Date.now() - elapsedMs;
+    tickTimerRef.current = window.setInterval(() => {
+      setElapsedMs(Date.now() - startTime);
+      const sinceLast = Date.now() - lastFlushRef.current;
+      if (sinceLast >= BATCH_INTERVAL_MS) {
+        flushBatch();
+      }
+    }, 1000) as unknown as number;
+    // restart watcher
+    startWatcherRef.current?.(true);
+    setIsPaused(false);
+  }, [isTracking, isPaused, elapsedMs, flushBatch]);
 
   const stop = useCallback(async (completeAndClaim?: boolean, name?: string) => {
     try {
@@ -389,6 +420,7 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
       setStartedAt(null);
       setElapsedMs(0);
       setTrackedCoordinates([]);
+      setIsPaused(false);
       return true;
     } catch (e: any) {
       console.error("Route completion error:", e);
@@ -448,6 +480,7 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
       setCurrentLocation(null);
       batchRef.current = [];
       setTrackedCoordinates([]);
+      setIsPaused(false);
 
       // Delete the route from backend if we have one
       if (userId && currentRouteId) {
@@ -537,19 +570,22 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
 
   const value = useMemo<UseRouteTrackerResult>(() => ({
     isTracking,
+    isPaused,
     startedAt,
     elapsedMs,
     routeId,
     currentLocation,
     trackedCoordinates,
     start,
+    pause,
+    resume,
     stop,
     cancel,
     cleanup,
     error,
     clearError,
     flush: flushBatch,
-  }), [isTracking, startedAt, elapsedMs, routeId, start, stop, cancel, cleanup, error, currentLocation, trackedCoordinates, clearError, flushBatch]);
+  }), [isTracking, isPaused, startedAt, elapsedMs, routeId, start, pause, resume, stop, cancel, cleanup, error, currentLocation, trackedCoordinates, clearError, flushBatch]);
 
   return value;
 }

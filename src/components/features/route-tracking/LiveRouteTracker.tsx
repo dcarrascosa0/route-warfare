@@ -635,6 +635,28 @@ export default function LiveRouteTracker({
                                 <CheckCircle className="w-4 h-4 md:mr-2" />
                                 <span className="hidden md:inline">Complete</span>
                             </Button>
+                            {tracker.isTracking && !tracker.isPaused && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={async () => { await tracker.pause(); }}
+                                    title="Pause tracking"
+                                >
+                                    <Square className="w-4 h-4 md:mr-2" />
+                                    <span className="hidden md:inline">Pause</span>
+                                </Button>
+                            )}
+                            {tracker.isTracking && tracker.isPaused && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={async () => { await tracker.resume(); }}
+                                    title="Resume tracking"
+                                >
+                                    <Play className="w-4 h-4 md:mr-2" />
+                                    <span className="hidden md:inline">Resume</span>
+                                </Button>
+                            )}
                             <Button
                                 variant="destructive"
                                 size="sm"

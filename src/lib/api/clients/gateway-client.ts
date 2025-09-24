@@ -248,6 +248,14 @@ class GatewayApiClient {
         return this.leaderboard.getLeaderboardStats(category);
     }
 
+    async getRoutesForAllUsers() {
+        return this.routes.getRoutesForAllUsers();
+    }
+
+    async getTotalPlayers() {
+        return this.leaderboard.getTotalPlayers();
+    }
+
     // Notification convenience methods
     async getUserNotifications(userId: string) {
         return this.notifications.getUserNotifications(userId);

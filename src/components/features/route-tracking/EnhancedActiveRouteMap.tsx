@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { MapContainer, TileLayer } from 'react-leaflet';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { MapControls } from '@/components/common/MapControls';
 import { Maximize2, Minimize2, RotateCcw, ZoomIn, ZoomOut, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import MapPanes from './components/MapPanes';
@@ -409,76 +410,16 @@ export default function EnhancedActiveRouteMap({
 
     // Render map controls
     const renderMapControls = () => (
-        <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2">
-            <Card className="p-1">
-                <div className="flex flex-col gap-1">
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleZoomIn}
-                        className="h-8 w-8 p-0"
-                        title="Zoom In"
-                    >
-                        <ZoomIn className="h-4 w-4" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleZoomOut}
-                        className="h-8 w-8 p-0"
-                        title="Zoom Out"
-                    >
-                        <ZoomOut className="h-4 w-4" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleAutoFit}
-                        className="h-8 w-8 p-0"
-                        title="Fit to Route"
-                    >
-                        <RotateCcw className="h-4 w-4" />
-                    </Button>
-                    {territoryPreviewEnabled && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleTerritoryPreviewToggle}
-                            className={cn(
-                                "h-8 w-8 p-0",
-                                territoryContext.isConnected && "ring-2 ring-green-500 ring-opacity-50"
-                            )}
-                            title={
-                                territoryPreviewVisible 
-                                    ? `Hide Territory Preview${territoryContext.isConnected ? ' (Live Updates)' : ' (Offline)'}` 
-                                    : `Show Territory Preview${territoryContext.isConnected ? ' (Live Updates)' : ' (Offline)'}`
-                            }
-                        >
-                            {territoryPreviewVisible ? (
-                                <Eye className="h-4 w-4" />
-                            ) : (
-                                <EyeOff className="h-4 w-4" />
-                            )}
-                        </Button>
-                    )}
-                    {fullscreenEnabled && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleFullscreenToggle}
-                            className="h-8 w-8 p-0"
-                            title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
-                        >
-                            {isFullscreen ? (
-                                <Minimize2 className="h-4 w-4" />
-                            ) : (
-                                <Maximize2 className="h-4 w-4" />
-                            )}
-                        </Button>
-                    )}
-                </div>
-            </Card>
-        </div>
+        <MapControls
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onFit={handleAutoFit}
+            onRecenter={handleAutoFit}
+            onToggleLayer={handleTerritoryPreviewToggle}
+            fullscreenEnabled={fullscreenEnabled}
+            isFullscreen={isFullscreen}
+            onToggleFullscreen={handleFullscreenToggle}
+        />
     );
 
     // Calculate container styles

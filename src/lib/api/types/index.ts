@@ -11,7 +11,6 @@ export type {
   UserTerritoryStatistics,
   GlobalTerritoryStatistics,
   TerritoryLeaderboard,
-  LeaderboardEntry,
   LeaderboardPageInfo,
   TerritoryPreview,
   TerritoryEligibilityValidation,
@@ -23,6 +22,7 @@ export type {
   TerritoryStatisticsResponse,
   TerritoryPreviewResponse
 } from './territories';
+export type { LeaderboardEntry as TerritoryLeaderboardEntry } from './territories';
 export * from './territory-preview';
 export * from './users';
 export * from './notifications';

@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState, useCallback, memo } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Route, Search, Target, Trash2, Eye, Calendar, Activity, StopCircle, AlertTriangle, CheckCircle, XCircle, Clock, Award, TrendingUp, RefreshCw } from "lucide-react";
+import { UnitsFormatter } from "@/lib/format/units";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { GatewayAPI } from "@/lib/api";
-import { queryKeys } from "@/lib/query";
+import { queryKeys, invalidateQueries } from "@/lib/query";
 import { useActiveRoute } from "@/hooks/useApiQueries";
 import LiveRouteTracker from "@/components/features/route-tracking/LiveRouteTracker";
 import GPSSimulator from "@/components/common/dev/GPSSimulator";
@@ -18,6 +22,7 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { useTerritory } from "@/hooks/useTerritory";
+import { useWebSocketManager } from "@/hooks/useWebSocketManager";
 import { MapPin, Maximize } from "lucide-react";
 
 const MemoizedLiveRouteTracker = memo(LiveRouteTracker);
@@ -137,7 +142,23 @@ export interface RouteData {
 const Routes = () => {
   const { user } = useAuth();
   const userId = user?.id;
+  const navigate = useNavigate();
+  const location = useLocation();
   const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
+  const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
+  // Determine active tab from URL
+  const [tab, setTab] = useState<string>(() => (location.pathname.includes('/history') ? 'history' : 'active'));
+  useEffect(() => {
+    setTab(location.pathname.includes('/history') ? 'history' : 'active');
+  }, [location.pathname]);
+
+  const onTabChange = (val: string) => {
+    setTab(val);
+    const target = val === 'history' ? '/routes/history' : '/routes/active';
+    if (location.pathname !== target && !location.pathname.startsWith('/routes/history/')) {
+      navigate(target, { replace: true });
+    }
+  };
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "completed" | "abandoned">("all");
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -149,6 +170,7 @@ const Routes = () => {
 
 
   const queryClient = useQueryClient();
+  const { onMessage } = useWebSocketManager({ autoConnect: true });
 
   useEffect(() => {
     document.title = "My Routes - Route Wars";
@@ -165,6 +187,39 @@ const Routes = () => {
       });
     }
   }, []);
+
+  // Real-time updates: listen for completion/deletion to refresh lists immediately
+  useEffect(() => {
+    if (!userId) return;
+    const offCompleted = onMessage('route_completed', () => {
+      invalidateQueries.routes(queryClient, userId);
+    });
+    const offDeleted = onMessage('route_deleted', () => {
+      invalidateQueries.routes(queryClient, userId);
+    });
+    const offStats = onMessage('route_stats_updated', () => {
+      invalidateQueries.activeRoute(queryClient, userId);
+    });
+    const offTerritoryClaimed = onMessage('territory_claimed', () => {
+      invalidateQueries.territories(queryClient, userId);
+      invalidateQueries.territoryStatistics(queryClient, userId);
+    });
+    return () => {
+      offCompleted?.();
+      offDeleted?.();
+      offStats?.();
+      offTerritoryClaimed?.();
+    };
+  }, [onMessage, queryClient, userId]);
+
+  // Open drawer when history route id is present in URL
+  const params = useParams<{ id?: string }>();
+  useEffect(() => {
+    if (location.pathname.startsWith('/routes/history') && params.id) {
+      setSelectedRoute(params.id);
+      setHistoryDrawerOpen(true);
+    }
+  }, [location.pathname, params.id]);
 
   // Fetch active route
   const { data: activeRoute, refetch: refetchActiveRoute, isLoading: isLoadingActiveRoute } = useActiveRoute(userId);
@@ -231,10 +286,9 @@ const Routes = () => {
   }, []);
 
   const handleNavigateToTerritory = useCallback((territoryId: string) => {
-    // Store the territory ID for highlighting and navigate
     localStorage.setItem('highlightTerritoryId', territoryId);
-    window.location.href = `/territory?highlight=${territoryId}`;
-  }, []);
+    navigate(`/territory/map?highlight=${territoryId}`);
+  }, [navigate]);
 
   const handleRetryTerritoryClaimFromRoute = useCallback((route: RouteData) => {
     setTerritoryRetryRouteData(route);
@@ -358,11 +412,7 @@ const Routes = () => {
     return matchesSearch && matchesStatus;
   }), [routes, searchTerm, statusFilter]);
 
-  const formatDistance = useCallback((meters: number | null | undefined) => {
-    if (meters == null) return "—";
-    if (meters < 1000) return `${meters.toFixed(0)}m`;
-    return `${(meters / 1000).toFixed(1)}km`;
-  }, []);
+  const formatDistance = useCallback((meters: number | null | undefined) => UnitsFormatter.distance(meters ?? null), []);
 
   const formatDuration = useCallback((seconds?: number) => {
     if (!seconds) return "—";
@@ -407,6 +457,12 @@ const Routes = () => {
   return (
     <div className="min-h-screen bg-background">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        <Tabs value={tab} onValueChange={onTabChange} className="mb-6">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="active">Active</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
+          </TabsList>
+        </Tabs>
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4">
             <div>
@@ -429,15 +485,17 @@ const Routes = () => {
             </Button>
           </div>
 
-          {/* Live Route Tracking */}
-          <div className="mb-8">
-            <MemoizedLiveRouteTracker
-              userId={userId!}
-              onRouteComplete={handleRouteComplete}
-              onRouteStart={handleRouteStart}
-              onRouteStop={handleRouteStop}
-            />
-          </div>
+          {/* Live Route Tracking - only show on Active tab */}
+          {tab === 'active' && (
+            <div className="mb-8">
+              <MemoizedLiveRouteTracker
+                userId={userId!}
+                onRouteComplete={handleRouteComplete}
+                onRouteStart={handleRouteStart}
+                onRouteStop={handleRouteStop}
+              />
+            </div>
+          )}
         </div>
 
         {/* Search and Filters */}
@@ -512,7 +570,9 @@ const Routes = () => {
             )}
 
             <AnimatePresence>
-              {filteredRoutes.map((route, index) => (
+              {filteredRoutes
+                .filter(r => tab === 'active' ? r.status === 'active' : r.status !== 'active')
+                .map((route, index) => (
                 <motion.div
                   key={route.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -523,7 +583,10 @@ const Routes = () => {
                   <Card
                     className={`cursor-pointer transition-all duration-300 hover:shadow-glow ${selectedRoute === route.id ? 'ring-2 ring-primary shadow-glow' : 'bg-card/80 border-border/50'
                       }`}
-                    onClick={() => setSelectedRoute(route.id)}
+                    onClick={() => {
+                      setSelectedRoute(route.id);
+                      if (tab === 'history') setHistoryDrawerOpen(true);
+                    }}
                   >
                     <CardContent className="p-6">
                       <div className="flex items-start justify-between mb-4">
@@ -643,9 +706,8 @@ const Routes = () => {
                             <p className="text-sm text-muted-foreground">Territory</p>
                             <p className="font-semibold text-territory-claimed">
                               {route.stats.territory_area_km2
-                                ? `${route.stats.territory_area_km2.toFixed(2)} km²`
-                                : route.stats.is_closed_loop ? "Claimable" : "Open path"
-                              }
+                                ? UnitsFormatter.areaKm2(route.stats.territory_area_km2)
+                                : route.stats.is_closed_loop ? "Claimable" : "Open path"}
                             </p>
                           </div>
                         </div>
@@ -845,7 +907,7 @@ const Routes = () => {
                               </p>
                               {route.stats.territory_area_km2 && (
                                 <p className="text-sm font-medium mt-1">
-                                  Territory Area: {route.stats.territory_area_km2.toFixed(2)} km²
+                                  Territory Area: {UnitsFormatter.areaKm2(route.stats.territory_area_km2)}
                                 </p>
                               )}
                             </div>
@@ -1011,7 +1073,7 @@ const Routes = () => {
                 <div className="flex justify-between items-center">
                   <span className="text-sm">Territory Claimed</span>
                   <span className="font-bold text-territory-claimed">
-                    {routes.reduce((sum, r) => sum + (r.stats.territory_area_km2 || 0), 0).toFixed(2)} km²
+                    {UnitsFormatter.areaKm2(routes.reduce((sum, r) => sum + (r.stats.territory_area_km2 || 0), 0))}
                   </span>
                 </div>
               </CardContent>
@@ -1102,6 +1164,63 @@ const Routes = () => {
         } : null}
         coordinates={routeMapDetail?.ok ? (routeMapDetail as any).data.coordinates : []}
       />
+
+      {/* History Detail Drawer */}
+      <Sheet open={historyDrawerOpen} onOpenChange={setHistoryDrawerOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-xl">
+          <SheetHeader>
+            <SheetTitle>Route Details</SheetTitle>
+          </SheetHeader>
+          <div className="p-2 space-y-4">
+            {selectedRouteDetails?.ok ? (
+              (() => {
+                const route = selectedRouteDetails.data as RouteData;
+                const handleShare = async () => {
+                  const url = `${window.location.origin}/routes/history/${route.id}`;
+                  if ((navigator as any).share) {
+                    try { await (navigator as any).share({ title: route.name || 'Route', url }); } catch {}
+                  } else {
+                    try { await navigator.clipboard.writeText(url); toast.info('Link copied to clipboard'); } catch {}
+                  }
+                };
+                const handleExport = () => {
+                  const coords = (routeMapDetail?.ok ? (routeMapDetail as any).data.coordinates : []) as Array<{ latitude: number; longitude: number; timestamp?: string }>;
+                  if (!coords || coords.length === 0) { toast.info('No coordinates to export'); return; }
+                  const gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Route Wars" xmlns="http://www.topografix.com/GPX/1/1">\n<trk><name>${route.name || route.id}</name><trkseg>\n${coords.map(c => `<trkpt lat="${c.latitude}" lon="${c.longitude}"></trkpt>`).join('\n')}\n</trkseg></trk></gpx>`;
+                  const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+                  const a = document.createElement('a');
+                  a.href = URL.createObjectURL(blob);
+                  a.download = `${(route.name || 'route').replace(/\s+/g,'_')}.gpx`;
+                  a.click();
+                  URL.revokeObjectURL(a.href);
+                };
+                return (
+                  <div className="space-y-4">
+                    <div className="text-sm text-muted-foreground">{route.description || 'No description provided'}</div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <div className="text-muted-foreground">Status</div>
+                        <div className="font-medium capitalize">{route.status}</div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground">Area Claimed</div>
+                        <div className="font-medium">{route.stats.territory_area_km2 ? UnitsFormatter.areaKm2(route.stats.territory_area_km2) : '—'}</div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={() => handleOpenRouteMap(route)} title="View on map">View Map</Button>
+                      <Button variant="outline" onClick={handleShare} title="Share route">Share</Button>
+                      <Button variant="outline" onClick={handleExport} title="Export GPX">Export</Button>
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
+              <div className="text-sm text-muted-foreground">Loading route details...</div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Territory Claim Retry Modal */}
       {territoryRetryRouteData && (

@@ -19,6 +19,7 @@ export interface LeaderboardResponse {
   entries: LeaderboardEntry[];
   total_count: number;
   user_rank?: number;
+  user_score?: number;
   period: string;
   category: string;
 }

@@ -1,41 +1,40 @@
 import { useQuery } from '@tanstack/react-query';
 import { GatewayAPI } from '@/lib/api';
 import type { 
-  TerritoryLeaderboardCategory, 
-  TerritoryLeaderboardEntry, 
-  TerritoryAchievement,
+  LeaderboardEntry, 
   LeaderboardStats 
-} from '@/lib/api/types';
+} from '@/lib/api/types/leaderboard';
+import type { TerritoryAchievement } from '@/lib/api/types';
 
-export const useTerritoryLeaderboard = (
-  category: TerritoryLeaderboardCategory = 'territory_area',
+export const useLeaderboard = (
+  category: string = 'territory_area',
   period: string = 'ALL_TIME',
   start: number = 0,
   limit: number = 50
 ) => {
   return useQuery({
-    queryKey: ['territory-leaderboard', category, period, start, limit],
+    queryKey: ['leaderboard', category, period, start, limit],
     queryFn: async () => {
-      const result = await GatewayAPI.leaderboard.getTerritoryLeaderboard(category, period, start, limit);
+      const result = await GatewayAPI.leaderboard.getLeaderboard(category, period, start, limit);
       if (result.ok) {
         return result.data;
       }
-      throw new Error((result.error as any)?.message || 'Failed to fetch territory leaderboard');
+      throw new Error((result.error as any)?.message || 'Failed to fetch leaderboard');
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchInterval: 10 * 60 * 1000, // 10 minutes
   });
 };
 
-export const useTerritoryLeaderboardStats = (category: TerritoryLeaderboardCategory = 'territory_area') => {
+export const useLeaderboardStats = (category: string = 'territory_area') => {
   return useQuery({
-    queryKey: ['territory-leaderboard-stats', category],
+    queryKey: ['leaderboard-stats', category],
     queryFn: async () => {
       const result = await GatewayAPI.leaderboard.getLeaderboardStats(category);
       if (result.ok) {
         return result.data as LeaderboardStats;
       }
-      throw new Error((result.error as any)?.message || 'Failed to fetch territory leaderboard stats');
+      throw new Error((result.error as any)?.message || 'Failed to fetch leaderboard stats');
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
     refetchInterval: 15 * 60 * 1000, // 15 minutes
@@ -56,63 +55,51 @@ export const useUserAchievements = (userId: string) => {
   });
 };
 
-export const useTerritoryLeaderboardWithAchievements = (
-  category: TerritoryLeaderboardCategory = 'territory_area',
+export const useLeaderboardWithAchievements = (
+  category: string = 'territory_area',
   period: string = 'ALL_TIME',
   start: number = 0,
   limit: number = 50
 ) => {
   return useQuery({
-    queryKey: ['territory-leaderboard-achievements', category, period, start, limit],
+    queryKey: ['leaderboard-achievements', category, period, start, limit],
     queryFn: async () => {
       const result = await GatewayAPI.leaderboard.getTerritoryLeaderboardWithAchievements(category, period, start, limit);
       if (result.ok) {
         return result.data;
       }
-      throw new Error((result.error as any)?.message || 'Failed to fetch territory leaderboard with achievements');
+      throw new Error((result.error as any)?.message || 'Failed to fetch leaderboard with achievements');
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchInterval: 10 * 60 * 1000, // 10 minutes
   });
 };
 
-// Helper hook to get all territory leaderboard categories
-export const useTerritoryLeaderboardCategories = () => {
+// Helper hook to get main leaderboard categories
+export const useLeaderboardCategories = () => {
   const categories: Array<{
-    key: TerritoryLeaderboardCategory;
+    key: string;
     name: string;
     description: string;
     icon: string;
   }> = [
     {
       key: 'territory_area',
-      name: 'Total Area',
+      name: 'Most Territory',
       description: 'Total territory area claimed',
       icon: '🏆'
     },
     {
-      key: 'territory_count',
-      name: 'Territory Count',
-      description: 'Number of territories claimed',
-      icon: '📊'
+      key: 'routes_completed',
+      name: 'Most Routes',
+      description: 'Number of completed routes',
+      icon: '🛣️'
     },
     {
-      key: 'territory_recent',
-      name: 'Recent Activity',
-      description: 'Recent territory claims (7 days)',
-      icon: '⚡'
-    },
-    {
-      key: 'territory_avg_size',
-      name: 'Average Size',
-      description: 'Average territory size',
-      icon: '📏'
-    },
-    {
-      key: 'territory_efficiency',
-      name: 'Efficiency',
-      description: 'Territory area per route',
-      icon: '🎯'
+      key: 'win_rate',
+      name: 'Win Rate',
+      description: 'Route completion percentage',
+      icon: '📈'
     }
   ];
 

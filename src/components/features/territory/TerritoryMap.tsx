@@ -2,15 +2,24 @@ import { useEffect, useState, useCallback } from "react";
 import { MapContainer, TileLayer, Polygon, Popup, useMap } from "react-leaflet";
 import { LatLngBounds, LatLng } from "leaflet";
 import { Card, CardContent } from "@/components/ui/card";
+import { MapControls } from "@/components/common/MapControls";
+import { MapLegend } from "@/components/common/MapLegend";
+import { TerritoryHoverCard } from "@/components/common/TerritoryHoverCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { MapPin, User, Calendar, Ruler, AlertTriangle, Eye } from "lucide-react";
+import { MapPin, User, Calendar, Ruler, AlertTriangle, Eye, Target } from "lucide-react";
+import { UnitsFormatter } from "@/lib/format/units";
+import ZoneDrawer, { ZoneData } from "@/components/common/ZoneDrawer";
 import { cn } from "@/lib/utils";
 import { useGlobalTerritoryWebSocket } from "@/hooks/useTerritoryWebSocket";
+import { useWebSocketManager } from "@/hooks/useWebSocketManager";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys, invalidateQueries } from "@/lib/query";
 import MapResizeFix from "@/components/features/route-tracking/components/MapResizeFix";
 import "leaflet/dist/leaflet.css";
 import "./TerritoryMap.css";
+import { EmptyState } from "@/components/common/EmptyState";
 
 // Mock territory data structure - will be replaced with real API data
 interface Territory {
@@ -109,12 +118,7 @@ const TerritoryDetailModal = ({ territory, isOpen, onClose }: {
     isOpen: boolean;
     onClose: () => void;
 }) => {
-    const formatArea = (areaSquareMeters: number) => {
-        if (areaSquareMeters >= 1000000) {
-            return `${(areaSquareMeters / 1000000).toFixed(2)} km²`;
-        }
-        return `${areaSquareMeters.toLocaleString()} m²`;
-    };
+    const formatArea = (areaSquareMeters: number) => UnitsFormatter.areaSquareMeters(areaSquareMeters);
 
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString('en-US', {
@@ -204,10 +208,12 @@ export const TerritoryMap = ({
     className
 }: TerritoryMapProps) => {
     const [selectedTerritory, setSelectedTerritory] = useState<Territory | null>(null);
+    const [drawerOpen, setDrawerOpen] = useState(false);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [realtimeTerritories, setRealtimeTerritories] = useState<Territory[]>(territories);
     const [mapRefreshKey, setMapRefreshKey] = useState(0);
     const [hoveredTerritoryId, setHoveredTerritoryId] = useState<string | null>(null);
+    const [showGrid, setShowGrid] = useState(false);
 
 
 
@@ -226,6 +232,17 @@ export const TerritoryMap = ({
     useGlobalTerritoryWebSocket({
         onTerritoryMapUpdate: handleTerritoryMapUpdate,
     });
+
+    // Also listen on notifications WS for territory_claimed to invalidate caches immediately
+    const queryClient = useQueryClient();
+    const { onMessage } = useWebSocketManager({ autoConnect: true });
+    useEffect(() => {
+        const off = onMessage('territory_claimed', (msg) => {
+            const userId = (msg.data && msg.data.user_id) as string | undefined;
+            invalidateQueries.territories(queryClient, userId);
+        });
+        return () => { off?.(); };
+    }, [onMessage, queryClient]);
 
     // Update local territories when prop changes
     useEffect(() => {
@@ -267,6 +284,7 @@ export const TerritoryMap = ({
     const handleTerritoryClick = (territory: Territory) => {
         setSelectedTerritory(territory);
         onTerritorySelect?.(territory);
+        setDrawerOpen(true);
     };
 
     const handleTerritoryDoubleClick = (territory: Territory) => {
@@ -335,54 +353,14 @@ export const TerritoryMap = ({
                                 mouseout: () => setHoveredTerritoryId(null)
                             }}
                         >
-                            <Popup className="territory-popup">
-                                <div className="min-w-48 bg-card/95 backdrop-blur-md border border-border/50 rounded-lg p-4 shadow-glow">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <div className={`w-3 h-3 rounded-full ${
-                                            territory.contested ? 'bg-orange-500 animate-pulse' :
-                                            territory.is_mine ? 'bg-primary shadow-glow' :
-                                            'bg-cyan-500'
-                                        }`} />
-                                        <div className="font-semibold text-foreground">
-                                            {territory.name || `Territory ${territory.id.slice(0, 8)}`}
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="space-y-2 text-sm">
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-muted-foreground">Owner:</span>
-                                            <span className="font-medium text-foreground">{territory.owner_name}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-muted-foreground">Area:</span>
-                                            <span className="font-medium text-foreground">
-                                                {territory.area_square_meters >= 1000000
-                                                    ? `${(territory.area_square_meters / 1000000).toFixed(2)} km²`
-                                                    : `${territory.area_square_meters.toLocaleString()} m²`
-                                                }
-                                            </span>
-                                        </div>
-                                        {territory.contested && (
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-muted-foreground">Status:</span>
-                                                <span className="font-medium text-orange-500 flex items-center gap-1">
-                                                    <AlertTriangle className="h-3 w-3" />
-                                                    Contested ({territory.contest_count})
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    
-                                    <Button
-                                        size="sm"
-                                        className="w-full mt-3 bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary hover:text-primary-foreground transition-all duration-200"
-                                        onClick={() => handleTerritoryDoubleClick(territory)}
-                                    >
-                                        <Eye className="h-3 w-3 mr-2" />
-                                        View Details
-                                    </Button>
-                                </div>
-                            </Popup>
+                            <Popup className="territory-popup"><TerritoryHoverCard territory={{
+                                id: territory.id,
+                                name: territory.name,
+                                owner_name: territory.owner_name,
+                                area_square_meters: territory.area_square_meters,
+                                contested: territory.contested,
+                                contest_count: territory.contest_count,
+                            }} onViewDetails={() => handleTerritoryDoubleClick(territory)} /></Popup>
                         </Polygon>
                     );
                 })}
@@ -390,66 +368,42 @@ export const TerritoryMap = ({
 
             {/* Enhanced Territory Legend */}
             {showOwnershipIndicators && !showEmptyState && (
-                <Card className="absolute top-4 right-4 z-[1000] bg-card/80 backdrop-blur-md border border-border/50 shadow-glow">
-                    <CardContent className="p-4">
-                        <div className="space-y-3">
-                            <div className="text-sm font-semibold text-foreground flex items-center gap-2">
-                                <MapPin className="h-4 w-4 text-primary" />
-                                Territory Legend
-                            </div>
-                            <div className="space-y-2 text-xs">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-4 h-3 bg-primary/30 border-2 border-primary rounded-sm shadow-glow animate-territory-glow"></div>
-                                    <span className="text-foreground font-medium">Your Territories</span>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-4 h-3 bg-cyan-500/20 border-2 border-cyan-500 rounded-sm"></div>
-                                    <span className="text-muted-foreground">Other Territories</span>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-4 h-3 bg-orange-500/30 border-2 border-orange-500 rounded-sm animate-pulse" style={{borderStyle: 'dashed'}}></div>
-                                    <span className="text-orange-500 font-medium flex items-center gap-1">
-                                        <AlertTriangle className="h-3 w-3" />
-                                        Contested
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+                <div className="absolute top-4 right-4 z-[1000]"><MapLegend /></div>
             )}
 
             {/* Enhanced empty state overlay */}
             {showEmptyState && (
-                <div className="absolute inset-0 flex items-center justify-center z-[500]">
-                    <div className="text-center space-y-6 p-8 territory-empty-state max-w-md mx-4">
-                        <div className="relative">
-                            <MapPin className="h-20 w-20 text-primary mx-auto animate-pulse" />
-                            <div className="absolute inset-0 h-20 w-20 mx-auto rounded-full bg-primary/20 animate-ping"></div>
-                        </div>
-                        <div className="space-y-3">
-                            <h3 className="text-xl font-bold text-foreground">
-                                {activeTerritories.length === 0
-                                    ? "No Territories Claimed"
-                                    : "No Matching Territories"
-                                }
-                            </h3>
-                            <p className="text-muted-foreground leading-relaxed">
-                                {activeTerritories.length === 0
-                                    ? "Start tracking routes and complete them to claim your first territory. Each completed route can become a valuable piece of your empire."
-                                    : "Adjust your search terms or filters to discover territories that match your criteria."
-                                }
-                            </p>
-                        </div>
-                        {activeTerritories.length === 0 && (
-                            <div className="flex items-center justify-center gap-2 text-sm text-primary">
-                                <Target className="h-4 w-4" />
-                                <span>Ready to conquer new territories?</span>
-                            </div>
-                        )}
-                    </div>
+                <div className="absolute inset-0 flex items-center justify-center z-[500] p-6">
+                    <EmptyState
+                        Icon={MapPin}
+                        title={activeTerritories.length === 0 ? "No Territories Claimed" : "No Matching Territories"}
+                        message={activeTerritories.length === 0
+                            ? "Start tracking routes and complete them to claim your first territory. Each completed route can become a valuable piece of your empire."
+                            : "Adjust your search terms or filters to discover territories that match your criteria."}
+                    />
                 </div>
             )}
+
+            {/* Shared Map Controls */}
+            <MapControls onFit={() => setMapRefreshKey(prev => prev + 1)} onToggleGrid={() => setShowGrid(v => !v)} />
+
+            {/* Zone Drawer (right-side) */}
+            <ZoneDrawer
+                open={drawerOpen}
+                onOpenChange={setDrawerOpen}
+                zone={selectedTerritory ? {
+                    id: selectedTerritory.id,
+                    name: selectedTerritory.name,
+                    owner_name: selectedTerritory.owner_name,
+                    area_square_meters: selectedTerritory.area_square_meters,
+                    contested: selectedTerritory.contested,
+                    contest_count: selectedTerritory.contest_count,
+                } as ZoneData : null}
+                onViewDetails={() => setIsDetailModalOpen(true)}
+                onShare={() => 
+                    selectedTerritory && navigator.clipboard.writeText(`${window.location.origin}/territory/map?highlight=${selectedTerritory.id}`)
+                }
+            />
 
             {/* Territory Detail Modal */}
             {selectedTerritory && (
@@ -458,6 +412,11 @@ export const TerritoryMap = ({
                     isOpen={isDetailModalOpen}
                     onClose={() => setIsDetailModalOpen(false)}
                 />
+            )}
+
+            {/* Grid Overlay */}
+            {showGrid && (
+                <div className="pointer-events-none absolute inset-0 z-[500]" style={{ backgroundSize: '40px 40px', backgroundImage: 'linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)' }} />
             )}
         </div>
     );
