@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { WebSocketManager, WebSocketMessage, ConnectionState, createWebSocketManager } from '../lib/websocket/websocket-manager';
 import { useAuth } from './useAuth';
 import { TokenManager } from '../contexts/AuthContext';
+import { useGlobalControls } from '@/contexts/GlobalControlsContext';
 
 export interface UseWebSocketManagerOptions {
   autoConnect?: boolean;
@@ -26,6 +27,7 @@ export interface WebSocketHookState {
 
 export const useWebSocketManager = (options: UseWebSocketManagerOptions = {}) => {
   const { user } = useAuth();
+  const { live } = useGlobalControls();
   const wsManagerRef = useRef<WebSocketManager | null>(null);
   const [state, setState] = useState<WebSocketHookState>({
     connectionState: {
@@ -102,8 +104,9 @@ export const useWebSocketManager = (options: UseWebSocketManagerOptions = {}) =>
     wsManager.on('statechange', onStateChange);
     wsManager.on('message', onMessage);
 
-    if (options.autoConnect) {
-        wsManager.connect();
+    // Respect global live toggle for auto connection
+    if (options.autoConnect !== false && live) {
+      wsManager.connect();
     }
     
     return () => {
@@ -111,7 +114,21 @@ export const useWebSocketManager = (options: UseWebSocketManagerOptions = {}) =>
       wsManager.removeListener('message', onMessage);
       wsManager.disconnect();
     };
-  }, [user, options.autoConnect]);
+  }, [user, options.autoConnect, live]);
+
+  // React to changes in global live toggle
+  useEffect(() => {
+    const wsManager = wsManagerRef.current;
+    if (!wsManager) return;
+
+    if (live && !state.isConnected && !state.isConnecting) {
+      wsManager.connect();
+    }
+    if (!live && (state.isConnected || state.isConnecting)) {
+      wsManager.disconnect();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live]);
 
   // Send message
   const sendMessage = useCallback((message: WebSocketMessage) => {

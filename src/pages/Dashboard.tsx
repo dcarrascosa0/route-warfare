@@ -69,12 +69,12 @@ const Dashboard = () => {
     select: (res) => (res.ok && res.data ? res.data : []),
   });
 
-  // Fetch active route (with graceful fallback)
+  // Fetch active route for resume banner
   const { data: activeRoute } = useQuery({
     queryKey: queryKeys.activeRoute(user!.id),
     queryFn: () => GatewayAPI.getActiveRoute(user!.id),
     enabled: !!user,
-    refetchInterval: 30000, // Poll for active route changes
+    refetchInterval: 30000,
   });
 
   const isLoading = profileLoading || statsLoading;
@@ -123,29 +123,17 @@ const Dashboard = () => {
     <div className="min-h-screen bg-background p-4 md:p-6">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">
-              Welcome back, {user?.username}!
-            </h1>
-            <p className="text-muted-foreground">
-              Here's what's happening in your territory conquest journey.
-            </p>
+            <h1 className="text-3xl font-bold">Welcome back, {user?.username}!</h1>
+            <p className="text-muted-foreground">Jump back in and claim more territory.</p>
           </div>
-          <div className="flex gap-2">
-            <Button asChild className="bg-gradient-hero hover:shadow-glow">
-              <Link to="/routes" className="flex items-center gap-2">
-                <Play className="w-4 h-4" />
-                Start Route
-              </Link>
-            </Button>
-            <Button variant="outline" asChild>
-              <Link to="/territory" className="flex items-center gap-2">
-                <Map className="w-4 h-4" />
-                View Map
-              </Link>
-            </Button>
-          </div>
+          <Button asChild size="lg" className="bg-gradient-hero hover:shadow-glow">
+            <Link to="/routes" className="flex items-center gap-2">
+              <Play className="w-4 h-4" />
+              Start Run
+            </Link>
+          </Button>
         </div>
 
         {/* API Issues Warning */}
@@ -158,21 +146,26 @@ const Dashboard = () => {
           </Alert>
         )}
 
-        {/* Active Route Alert */}
+        {/* Resume Banner (above the fold) */}
         {activeRoute && (
-          <Alert className="border-green-200 bg-green-50">
-            <Activity className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">
-              You have an active route in progress!
-              <Link to="/routes" className="ml-2 underline font-medium">
-                Continue tracking →
-              </Link>
-            </AlertDescription>
-          </Alert>
+          <Card className="border-green-200 bg-green-50">
+            <CardContent className="py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Activity className="h-5 w-5 text-green-600" />
+                <div>
+                  <div className="font-semibold text-green-800">Active run in progress</div>
+                  <div className="text-sm text-green-700">Resume tracking to complete your loop and claim territory.</div>
+                </div>
+              </div>
+              <Button asChild size="sm" variant="outline" className="border-green-300 text-green-700">
+                <Link to="/routes">Resume</Link>
+              </Button>
+            </CardContent>
+          </Card>
         )}
 
-        {/* Statistics Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Minimal Overview Tiles */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Territory</CardTitle>
@@ -186,9 +179,7 @@ const Dashboard = () => {
                   <div className="text-2xl font-bold">
                     {UnitsFormatter.areaKm2(statistics?.total_territory_area_km2 || 0)}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {statistics?.total_territories || 0} zones claimed
-                  </p>
+                  <p className="text-xs text-muted-foreground">{statistics?.total_territories || 0} zones</p>
                 </>
               )}
             </CardContent>
@@ -225,20 +216,16 @@ const Dashboard = () => {
                 <Skeleton className="h-8 w-20" />
               ) : (
                 <>
-                  <div className="text-2xl font-bold">
-                    #{statistics?.rank || 'N/A'}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {statistics?.total_distance_km?.toFixed(1) || 0} km total
-                  </p>
+                  <div className="text-2xl font-bold">#{statistics?.rank || '—'}</div>
+                  <p className="text-xs text-muted-foreground">{(statistics?.total_distance_km || 0).toFixed(1)} km</p>
                 </>
               )}
             </CardContent>
           </Card>
-
+          {/* Keep one more tile minimal to avoid clutter */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Average Speed</CardTitle>
+              <CardTitle className="text-sm font-medium">Completion Rate</CardTitle>
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -246,77 +233,37 @@ const Dashboard = () => {
                 <Skeleton className="h-8 w-20" />
               ) : (
                 <>
-                  <div className="text-2xl font-bold">
-                    {statistics?.average_speed_kmh?.toFixed(1) || 0} km/h
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Keep exploring!
-                  </p>
+                  <div className="text-2xl font-bold">{((statistics?.completion_rate || 0) * 100).toFixed(0)}%</div>
+                  <p className="text-xs text-muted-foreground">of routes completed</p>
                 </>
               )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* User Statistics */}
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Performance Statistics</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {statistics ? (
-                  <UserStats statistics={{
-                    ...statistics,
-                    total_territory_area: statistics.total_territory_area_km2,
-                    total_zones: statistics.total_territories,
-                    routes_completed: statistics.total_routes,
-                    win_rate: statistics.completion_rate,
-                    current_rank: statistics.rank || 0,
-                    level: Math.floor((statistics.total_routes || 0) / 10) + 1, // Calculate level based on routes
-                    experience: (statistics.total_routes || 0) * 100 + (statistics.total_territory_area_km2 || 0) * 50, // Calculate XP
-                  }} />
-                ) : (
-                  <div className="space-y-4">
-                    <Skeleton className="h-32 w-full" />
-                    <Skeleton className="h-32 w-full" />
+        {/* Compact content to keep focus on Start Run */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="w-4 h-4" /> Recent Activity
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {recentActivity.map((activity) => (
+                <div key={activity.id} className="flex items-start gap-3">
+                  <div className="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{activity.description}</p>
+                    <p className="text-xs text-muted-foreground">{new Date(activity.timestamp).toLocaleString()}</p>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Recent Activity */}
-          <div>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="w-4 h-4" />
-                  Recent Activity
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {recentActivity.map((activity) => (
-                    <div key={activity.id} className="flex items-start gap-3">
-                      <div className="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{activity.description}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(activity.timestamp).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* Territories Overview */}
+        {/* Territories Overview (trimmed) */}
         <Card>
           <CardHeader>
             <CardTitle>Your Territories</CardTitle>
@@ -350,7 +297,7 @@ const Dashboard = () => {
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                    {UnitsFormatter.areaKm2(territory.area_km2)}
+                      {UnitsFormatter.areaKm2(territory.area_km2)}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Claimed {new Date(territory.claimed_at).toLocaleDateString()}
@@ -363,10 +310,10 @@ const Dashboard = () => {
                 <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-medium mb-2">No territories yet</h3>
                 <p className="text-muted-foreground mb-4">
-                  Start tracking routes to claim your first territory!
+                  Finish a closed loop to claim your first territory.
                 </p>
                 <Button asChild className="bg-gradient-hero hover:shadow-glow">
-                  <Link to="/routes">Start Your First Route</Link>
+                  <Link to="/routes">Start Run</Link>
                 </Button>
               </div>
             )}

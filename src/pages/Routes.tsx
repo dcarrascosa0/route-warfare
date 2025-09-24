@@ -609,7 +609,7 @@ const Routes = () => {
                             {route.completed_at && (
                               <span className="flex items-center gap-1">
                                 <Target className="w-4 h-4" />
-                                Completed {formatDate(route.completed_at)}
+                                Finished {formatDate(route.completed_at)}
                               </span>
                             )}
                           </div>
@@ -703,11 +703,11 @@ const Routes = () => {
                             <p className="font-semibold">{route.stats.coordinate_count ?? 0}</p>
                           </div>
                           <div>
-                            <p className="text-sm text-muted-foreground">Territory</p>
+                            <p className="text-sm text-muted-foreground">Claim</p>
                             <p className="font-semibold text-territory-claimed">
                               {route.stats.territory_area_km2
                                 ? UnitsFormatter.areaKm2(route.stats.territory_area_km2)
-                                : route.stats.is_closed_loop ? "Claimable" : "Open path"}
+                                : route.stats.is_closed_loop ? "Loop closed (claimable)" : "Open route"}
                             </p>
                           </div>
                         </div>
@@ -807,23 +807,7 @@ const Routes = () => {
                                   Retry Claim
                                 </Button>
                               )}
-                              {route.territory_claim_status === "conflict" && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toast.info("Territory conflict detected", {
-                                      description: "View the route map to see conflict details"
-                                    });
-                                    handleOpenRouteMap(route);
-                                  }}
-                                  className="text-yellow-600 hover:text-yellow-700 border-yellow-200 hover:border-yellow-300"
-                                >
-                                  <AlertTriangle className="w-4 h-4 mr-1" />
-                                  View Conflict
-                                </Button>
-                              )}
+                          {/* no conflict state */}
                               {!route.territory_claim_status && route.auto_claim_attempted === false && (
                                 <Button
                                   size="sm"
@@ -1158,7 +1142,9 @@ const Routes = () => {
           gps_quality_score: routeMapModalData.stats.gps_quality_score,
           territory_eligibility_score: routeMapModalData.stats.territory_eligibility_score,
           territory_id: routeMapModalData.territory_id,
-          territory_claim_status: routeMapModalData.territory_claim_status,
+          territory_claim_status: (routeMapModalData.territory_claim_status === 'conflict'
+            ? 'failed'
+            : routeMapModalData.territory_claim_status) as 'pending' | 'success' | 'failed',
           territory_claim_error: routeMapModalData.territory_claim_error,
           auto_claim_attempted: routeMapModalData.auto_claim_attempted
         } : null}
@@ -1168,9 +1154,9 @@ const Routes = () => {
       {/* History Detail Drawer */}
       <Sheet open={historyDrawerOpen} onOpenChange={setHistoryDrawerOpen}>
         <SheetContent side="right" className="w-full sm:max-w-xl">
-          <SheetHeader>
-            <SheetTitle>Route Details</SheetTitle>
-          </SheetHeader>
+            <SheetHeader>
+              <SheetTitle>Route Summary</SheetTitle>
+            </SheetHeader>
           <div className="p-2 space-y-4">
             {selectedRouteDetails?.ok ? (
               (() => {
@@ -1200,15 +1186,15 @@ const Routes = () => {
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div>
                         <div className="text-muted-foreground">Status</div>
-                        <div className="font-medium capitalize">{route.status}</div>
+                        <div className="font-medium capitalize">{route.status === 'completed' ? 'Finished' : route.status}</div>
                       </div>
                       <div>
-                        <div className="text-muted-foreground">Area Claimed</div>
+                        <div className="text-muted-foreground">Claimed Area</div>
                         <div className="font-medium">{route.stats.territory_area_km2 ? UnitsFormatter.areaKm2(route.stats.territory_area_km2) : '—'}</div>
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="outline" onClick={() => handleOpenRouteMap(route)} title="View on map">View Map</Button>
+                      <Button variant="outline" onClick={() => handleOpenRouteMap(route)} title="View on map">Open Map</Button>
                       <Button variant="outline" onClick={handleShare} title="Share route">Share</Button>
                       <Button variant="outline" onClick={handleExport} title="Export GPX">Export</Button>
                     </div>

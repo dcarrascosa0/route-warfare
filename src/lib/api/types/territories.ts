@@ -13,7 +13,7 @@ export interface UserTerritoryStatistics {
   average_area_km2: number;
   first_claim_date?: string;
   latest_claim_date?: string;
-  contested_territories: number;
+  // contested removed
   auto_claimed_territories: number;
   manual_claimed_territories: number;
   area_ranking: number;
@@ -30,7 +30,7 @@ export interface GlobalTerritoryStatistics {
   total_area_km2: number;
   average_territory_area_square_meters: number;
   average_territory_area_km2: number;
-  contested_territories: number;
+  // contested removed
   auto_claimed_territories: number;
   first_territory_date?: string;
   latest_territory_date?: string;
@@ -51,7 +51,7 @@ export interface LeaderboardEntry {
   average_area_km2: number;
   latest_claim_date?: string;
   first_claim_date?: string;
-  contested_territories: number;
+  // contested removed
 }
 
 export interface LeaderboardPageInfo {
@@ -73,11 +73,9 @@ export interface TerritoryPreview {
   area_square_meters: number;
   is_valid: boolean;
   preview_type: string; // 'valid', 'insufficient_data', 'error', 'no_coordinates'
-  conflicts: TerritoryConflict[];
+  // conflicts removed in UI model
   eligible_for_claiming: boolean;
   coordinate_count?: number;
-  conflict_count?: number;
-  major_conflicts?: TerritoryConflict[];
   error?: string;
   is_real_time?: boolean;
 }
@@ -98,9 +96,7 @@ export interface TerritoryValidationDetails {
   completed_at?: string;
   territory_claimed?: boolean;
   status?: string;
-  conflict_count?: number;
-  conflicts?: DetailedTerritoryConflict[];
-  minor_conflicts?: number;
+  // conflict details removed in UI model
   existing_territory_id?: string;
   error?: string;
 }
@@ -109,11 +105,12 @@ export interface EnhancedTerritoryEligibilityValidation extends TerritoryEligibi
   validation_score?: number; // 0-100 score
   improvement_suggestions: string[];
   estimated_area?: number;
-  potential_conflicts?: number;
+  // conflicts removed
 }
 
 // Enhanced Territory Conflict Types
-export interface DetailedTerritoryConflict {
+// Conflict types removed from UI typings (exclusive ownership)
+/* export interface DetailedTerritoryConflict {
   territory_id: string;
   owner_id: string;
   owner_name?: string;
@@ -124,9 +121,9 @@ export interface DetailedTerritoryConflict {
   conflict_severity: string; // 'low', 'medium', 'high', 'critical'
   resolution_suggestion: string;
   can_auto_resolve: boolean;
-}
+} */
 
-export interface TerritoryConflictResolution {
+/* export interface TerritoryConflictResolution {
   has_conflicts: boolean;
   conflict_count: number;
   major_conflicts: number;
@@ -135,10 +132,10 @@ export interface TerritoryConflictResolution {
   resolution_strategy: string; // 'none', 'negotiate', 'split', 'reject'
   auto_resolvable: boolean;
   requires_user_action: boolean;
-}
+} */
 
 export interface EnhancedTerritoryPreview extends TerritoryPreview {
-  conflict_resolution?: TerritoryConflictResolution;
+  // conflict_resolution removed
   territory_quality_score?: number; // 0-100 score
   optimization_suggestions: string[];
   estimated_claim_success_rate?: number; // 0-100 percentage
@@ -166,12 +163,12 @@ export interface Territory {
   owner_id: string;
   owner_username?: string;
   route_id: string;
-  status: "claimed" | "contested" | "neutral";
+  status: "claimed" | "neutral";
   area_km2: number;
   claimed_at: string;
   last_activity: string;
   boundary_coordinates: GeoPoint[];
-  contested_by?: string[];
+  // contested_by removed
   
   // Route integration fields
   source_route_id?: string;
@@ -179,15 +176,12 @@ export interface Territory {
   auto_claimed?: boolean;
   source_route?: RouteInfo;
   
-  // Claim history and conflicts
-  claim_history?: TerritoryClaimHistory[];
-  conflicts?: TerritoryConflict[];
+  // Conflicts removed
   
   // Additional metrics
   perimeter_m?: number;
   shape_complexity?: number;
-  contest_count?: number;
-  last_contested_at?: string;
+  // contested metadata removed
 }
 
 export interface RouteInfo {
@@ -205,12 +199,12 @@ export interface RouteInfo {
   
   // Territory integration fields
   territory_id?: string;
-  territory_claim_status?: "pending" | "success" | "failed" | "conflict";
+  territory_claim_status?: "pending" | "success" | "failed";
   territory_claim_error?: string;
   auto_claim_attempted?: boolean;
 }
 
-export interface TerritoryClaimHistory {
+/* export interface TerritoryClaimHistory {
   id: string;
   route_id: string;
   claim_attempt_at: string;
@@ -218,9 +212,9 @@ export interface TerritoryClaimHistory {
   conflicts_detected: number;
   resolution_method?: string;
   error_details?: Record<string, any>;
-}
+} */
 
-export interface TerritoryConflict {
+/* export interface TerritoryConflict {
   id: string;
   territory_id: string;
   overlapping_territory_id: string;
@@ -231,7 +225,7 @@ export interface TerritoryConflict {
   resolution_method?: string;
   detected_at: string;
   competing_route?: RouteInfo;
-}
+} */
 
 export interface TerritoryMapResponse {
   territories: Territory[];

@@ -16,7 +16,6 @@ import {
   Award,
   Crown,
   Medal,
-  Zap,
   ArrowUpDown,
   ChevronsRight
 } from "lucide-react";
@@ -44,13 +43,8 @@ const getAchievementLevel = (territoryCount: number, totalArea: number) => {
   return { level: "Emperor", color: "bg-yellow-500", icon: Crown };
 };
 
-// Format area for display
-const formatArea = (areaKm2: number) => {
-  if (areaKm2 >= 1) {
-    return `${areaKm2.toFixed(2)} km²`;
-  }
-  return `${(areaKm2 * 1000000).toLocaleString()} m²`;
-};
+// Use unified UnitsFormatter for area
+const formatArea = (areaKm2: number) => UnitsFormatter.areaKm2(areaKm2);
 
 // Format date for display
 const formatDate = (dateString?: string) => {
@@ -246,17 +240,7 @@ const TerritoryStatsContent = ({
               </div>
             </div>
 
-            {/* Contested */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Zap className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Contested</span>
-              </div>
-              <div className="text-2xl font-bold text-red-600">{stats.contested_territories}</div>
-              <div className="text-xs text-muted-foreground">
-                Under dispute
-              </div>
-            </div>
+            {/* removed contested tile */}
           </div>
 
           {/* Progress Bars */}
@@ -330,7 +314,7 @@ const TerritoryStatsContent = ({
                 
                 return (
                   <div
-                    key={entry.owner_id}
+                    key={entry.user_id}
                     className="flex items-center justify-between p-3 rounded-lg border"
                   >
                     <div className="flex items-center gap-3">
@@ -339,24 +323,22 @@ const TerritoryStatsContent = ({
                         <span className="font-bold text-lg">{entry.rank}</span>
                       </div>
                       <div>
-                        <div className="font-medium">
-                          Player {entry.owner_id.substring(0, 8)}
-                        </div>
+                        <div className="font-medium">{entry.username || `Player ${entry.user_id.substring(0, 8)}`}</div>
                         <div className="text-sm text-muted-foreground">
-                          {entry.territory_count} territories • {formatArea(entry.total_area_km2)}
+                          {(entry.territory_count ?? 0)} territories • {formatArea(entry.territory_area_km2 ?? 0)}
                         </div>
                       </div>
                     </div>
                     <div className="text-right">
                       <div className="font-medium">
-                        {selectedMetric === "total_area" && formatArea(entry.total_area_km2)}
-                        {selectedMetric === "territory_count" && `${entry.territory_count} territories`}
-                        {selectedMetric === "average_area" && formatArea(entry.average_area_km2)}
-                        {selectedMetric === "latest_claim" && formatDate(entry.latest_claim_date)}
+                        {selectedMetric === "total_area" && formatArea(entry.territory_area_km2 ?? 0)}
+                        {selectedMetric === "territory_count" && `${entry.territory_count ?? 0} territories`}
+                        {selectedMetric === "average_area" && formatArea(entry.avg_territory_size ?? 0)}
+                        {selectedMetric === "latest_claim" && `${entry.recent_claims ?? 0} recent claims`}
                       </div>
-                      {entry.contested_territories > 0 && (
-                        <div className="text-xs text-red-600">
-                          {entry.contested_territories} contested
+                      {(entry.recent_claims ?? 0) > 0 && (
+                        <div className="text-xs text-muted-foreground">
+                          {entry.recent_claims} recent claims
                         </div>
                       )}
                     </div>

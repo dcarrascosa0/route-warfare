@@ -30,8 +30,7 @@ interface Territory {
     boundary_coordinates: Array<{ latitude: number; longitude: number }>;
     area_square_meters: number;
     claimed_at: string;
-    contested: boolean;
-    contest_count: number;
+    // no contested state
     is_mine: boolean;
 }
 
@@ -55,17 +54,7 @@ const getTerritoryStyle = (territory: Territory, isSelected: boolean, isHovered:
         className: 'territory-polygon'
     };
 
-    if (territory.contested) {
-        // Contested territories - pulsing red with warning pattern
-        return {
-            ...baseStyle,
-            color: "#ff6b35", // Orange-red for contested
-            fillColor: "#ff6b35",
-            fillOpacity: isSelected ? 0.5 : isHovered ? 0.4 : 0.3,
-            dashArray: "8, 4", // Dashed border for contested
-            className: 'territory-polygon territory-contested animate-territory-pulse'
-        };
-    }
+    // exclusive ownership only
     
     if (territory.is_mine) {
         // User's territories - glowing orange with glass effect
@@ -144,18 +133,10 @@ const TerritoryDetailModal = ({ territory, isOpen, onClose }: {
                     <div className="flex items-center gap-2">
                         <Badge
                             variant={territory.is_mine ? "default" : "secondary"}
-                            className={cn(
-                                territory.contested && "bg-red-500 hover:bg-red-600"
-                            )}
+                            className={cn()}
                         >
-                            {territory.contested ? "Contested" : territory.is_mine ? "Your Territory" : "Claimed"}
+                            {territory.is_mine ? "Your Territory" : "Claimed"}
                         </Badge>
-                        {territory.contested && (
-                            <Badge variant="outline" className="text-red-600">
-                                <AlertTriangle className="h-3 w-3 mr-1" />
-                                {territory.contest_count} conflicts
-                            </Badge>
-                        )}
                     </div>
 
                     {/* Territory Details */}
@@ -185,12 +166,6 @@ const TerritoryDetailModal = ({ territory, isOpen, onClose }: {
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
                         </Button>
-                        {territory.contested && (
-                            <Button variant="destructive" size="sm" className="flex-1">
-                                <AlertTriangle className="h-4 w-4 mr-2" />
-                                Resolve Conflict
-                            </Button>
-                        )}
                     </div>
                 </div>
             </DialogContent>
@@ -269,7 +244,7 @@ export const TerritoryMap = ({
             case "mine":
                 return territory.is_mine;
             case "contested":
-                return territory.contested;
+                return false;
             case "nearby":
                 // TODO: Implement nearby logic based on user location
                 return true;
@@ -358,8 +333,7 @@ export const TerritoryMap = ({
                                 name: territory.name,
                                 owner_name: territory.owner_name,
                                 area_square_meters: territory.area_square_meters,
-                                contested: territory.contested,
-                                contest_count: territory.contest_count,
+                                
                             }} onViewDetails={() => handleTerritoryDoubleClick(territory)} /></Popup>
                         </Polygon>
                     );
@@ -396,8 +370,7 @@ export const TerritoryMap = ({
                     name: selectedTerritory.name,
                     owner_name: selectedTerritory.owner_name,
                     area_square_meters: selectedTerritory.area_square_meters,
-                    contested: selectedTerritory.contested,
-                    contest_count: selectedTerritory.contest_count,
+                    
                 } as ZoneData : null}
                 onViewDetails={() => setIsDetailModalOpen(true)}
                 onShare={() => 

@@ -190,15 +190,15 @@ const Leaderboard = () => {
         name: e.username ?? `Player ${globalRank}`,
         userId: e.user_id,
         score: e.score ?? 0,
-        totalArea: `${Math.max(0, Math.round(((e.territory_area_km2 ?? 0) * 10)) / 10)} km²`,
+        totalArea: `${(e.territory_area_km2 ?? 0).toFixed(2)} km²`,
         zones: e.territory_count ?? 0,
         routes: routeData.completed_routes,
         winRate: `${Math.round(routeData.win_rate)}%`,
-        level: 1, // This should come from user profile/gamification data
-        distance: `0.0 km`, // This should come from route statistics
-        trend: Math.random() > 0.5 ? "up" : Math.random() > 0.5 ? "down" : "stable" as "up" | "down" | "stable",
-        rankChange: Math.floor(Math.random() * 10) + 1,
-        badge: globalRank === 1 ? "Crown" : globalRank === 2 ? "Trophy" : globalRank === 3 ? "Medal" : null,
+        level: 1,
+        distance: `—`,
+        trend: "stable" as "up" | "down" | "stable",
+        rankChange: 0,
+        badge: globalRank <= 3 ? null : null,
         isCurrentUser: e.user_id === userId,
       } as LeaderboardPlayer;
     });
@@ -328,7 +328,7 @@ const Leaderboard = () => {
                 const IconComponent = p.icon;
                 const isSelected = selectedPeriod === p.id;
                 return (
-                  <Button key={p.id} variant={isSelected ? "secondary" : "ghost"} size="sm" className="flex items-center gap-1">
+                  <Button key={p.id} variant={isSelected ? "secondary" : "ghost"} size="sm" className="flex items-center gap-1" disabled>
                     <IconComponent className="w-3 h-3" />
                     {p.label}
                   </Button>
