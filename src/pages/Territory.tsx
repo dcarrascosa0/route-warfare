@@ -51,11 +51,17 @@ const Territory = () => {
     return territoriesData.territories.map((t) => {
       // Handle API response that might have boundary instead of boundary_coordinates
       const apiTerritory = t as any;
-      const boundaryCoordinates = apiTerritory.boundary_coordinates ||
-        (apiTerritory.boundary || []).map(([latitude, longitude]: [number, number]) => ({
-          latitude,
-          longitude
-        }));
+      // Normalize boundary from backend: prefer boundary_coordinates (array of {lat,lon}).
+      // If backend returns numeric pairs, map accordingly. Handle nulls.
+      let boundaryCoordinates = apiTerritory.boundary_coordinates as Array<{ latitude: number; longitude: number }> | undefined;
+      if (!boundaryCoordinates && Array.isArray(apiTerritory.boundary)) {
+        boundaryCoordinates = (apiTerritory.boundary as Array<[number, number]>).map(([latitude, longitude]) => ({ latitude, longitude }));
+      }
+      if (!boundaryCoordinates && Array.isArray(apiTerritory.boundary_geojson?.coordinates)) {
+        // Handle simple Polygon GeoJSON [[lng,lat],...] in case summary endpoint is used
+        const ring = apiTerritory.boundary_geojson.coordinates?.[0] || [];
+        boundaryCoordinates = ring.map(([lon, lat]: [number, number]) => ({ latitude: lat, longitude: lon }));
+      }
 
       return {
         ...t,
@@ -63,9 +69,8 @@ const Territory = () => {
         owner_name: t.owner_username || 'Unknown',
         name: t.name || 'Unnamed Territory',
         area_square_meters: t.area_km2 * 1000000,
-        contested: (t.contested_by?.length || 0) > 0,
-        contest_count: t.contest_count || 0,
-        boundary_coordinates: boundaryCoordinates,
+        // contested removed from model
+        boundary_coordinates: boundaryCoordinates || [],
       };
     });
   }, [territoriesData, user?.id]);

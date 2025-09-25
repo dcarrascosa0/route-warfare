@@ -28,6 +28,7 @@ interface Territory {
     owner_id: string;
     owner_name: string;
     boundary_coordinates: Array<{ latitude: number; longitude: number }>;
+    boundary_rings?: Array<Array<{ latitude: number; longitude: number }>>;
     area_square_meters: number;
     claimed_at: string;
     // no contested state
@@ -300,14 +301,16 @@ export const TerritoryMap = ({
                 {filteredTerritories.map(territory => {
                     const isSelected = territory.id === selectedTerritoryId || territory.id === selectedTerritory?.id;
                     const isHovered = hoveredTerritoryId === territory.id;
-                    const positions = (territory.boundary_coordinates || []).map(coord =>
-                        [coord.latitude, coord.longitude] as [number, number]
-                    );
+                    const positionsSingle = (territory.boundary_coordinates || []).map(coord => [coord.latitude, coord.longitude] as [number, number]);
+                    const positionsWithHoles = (territory.boundary_rings || []).map(ring => ring.map(coord => [coord.latitude, coord.longitude] as [number, number]));
 
                     // Skip territories with invalid coordinates
-                    if (positions.length < 3) {
+                    const invalid = positionsWithHoles.length > 0
+                        ? positionsWithHoles[0].length < 3
+                        : positionsSingle.length < 3;
+                    if (invalid) {
                         console.warn(`Territory ${territory.id} (${territory.name}) has insufficient coordinates:`, {
-                            positionsLength: positions.length,
+                            positionsLength: positionsSingle.length,
                             boundaryCoordinatesLength: territory.boundary_coordinates?.length || 0,
                             sampleCoordinates: territory.boundary_coordinates?.slice(0, 2)
                         });
@@ -319,7 +322,7 @@ export const TerritoryMap = ({
                     return (
                         <Polygon
                             key={territory.id}
-                            positions={positions}
+                            positions={(positionsWithHoles.length > 0 ? positionsWithHoles : positionsSingle) as any}
                             pathOptions={territoryStyle}
                             eventHandlers={{
                                 click: () => handleTerritoryClick(territory),
