@@ -3,7 +3,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { CheckCircle, XCircle, AlertTriangle, Clock, MapPin, Shield, Zap, Target } from 'lucide-react';
-import { TerritoryConflictInfo, ConflictResolution, TerritoryClaimResult } from '@/lib/api/types/routes';
+import { TerritoryConflictInfo, ConflictResolution, TerritoryClaimResult, GamificationResults } from '@/lib/api/types/routes';
+import { TerritoryGamificationRewards } from './TerritoryGamificationRewards';
 
 interface TerritoryClaimingStatusProps {
   status: 'success' | 'blocked' | 'failed' | 'ineligible' | 'error' | 'processing';
@@ -11,6 +12,7 @@ interface TerritoryClaimingStatusProps {
   territoryResult?: TerritoryClaimResult;
   conflicts?: TerritoryConflictInfo[];
   conflictResolution?: ConflictResolution;
+  gamificationResults?: GamificationResults;
   className?: string;
   showProgress?: boolean;
   progressValue?: number;
@@ -22,6 +24,7 @@ export const TerritoryClaimingStatus: React.FC<TerritoryClaimingStatusProps> = (
   territoryResult,
   conflicts = [],
   conflictResolution,
+  gamificationResults,
   className = '',
   showProgress = false,
   progressValue = 0
@@ -213,6 +216,16 @@ export const TerritoryClaimingStatus: React.FC<TerritoryClaimingStatusProps> = (
                     Successfully resolved {conflicts.length} territory conflicts
                   </div>
                 )}
+              </div>
+            )}
+            
+            {/* Gamification Rewards for successful territory claims */}
+            {status === 'success' && gamificationResults && (
+              <div className="mt-4">
+                <TerritoryGamificationRewards 
+                  gamificationResults={gamificationResults}
+                  territoryArea={territoryResult?.area_km2 || 0}
+                />
               </div>
             )}
             

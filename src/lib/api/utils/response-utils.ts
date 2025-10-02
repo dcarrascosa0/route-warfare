@@ -40,3 +40,11 @@ export function handleApiResponse<T>(
     onError(extractApiError(result));
   }
 }
+
+export function unwrapOr<T>(result: ApiResult<T>, fallback: T): T {
+  return isApiSuccess(result) ? result.data : fallback;
+}
+
+export function unwrapOrUndefined<T>(result: ApiResult<T>): T | undefined {
+  return isApiSuccess(result) ? result.data : undefined;
+}

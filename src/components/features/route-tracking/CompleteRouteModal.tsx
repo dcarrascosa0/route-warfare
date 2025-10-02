@@ -4,9 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
-import { CheckCircle, XCircle, Clock, RefreshCw, MapPin, Shield } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, RefreshCw, Shield, Trophy } from 'lucide-react';
 import { CompleteRouteResponse } from '@/lib/api/types/routes';
+import { Coordinate } from '@/lib/api/types/common';
 import { TerritoryClaimingStatus } from '../territory/TerritoryClaimingStatus';
+import { RouteCompletionMap } from './RouteCompletionMap';
+import { RouteCompletionRewards } from './RouteCompletionRewards';
 
 interface CompleteRouteModalProps {
   isOpen: boolean;
@@ -16,6 +19,7 @@ interface CompleteRouteModalProps {
   completionResult?: CompleteRouteResponse | null;
   completionError?: string | null;
   onRetry?: () => void;
+  coordinates?: Coordinate[];
 }
 
 export const CompleteRouteModal: React.FC<CompleteRouteModalProps> = ({
@@ -25,7 +29,8 @@ export const CompleteRouteModal: React.FC<CompleteRouteModalProps> = ({
   isCompleting = false,
   completionResult = null,
   completionError = null,
-  onRetry
+  onRetry,
+  coordinates = []
 }) => {
   const [routeName, setRouteName] = useState('');
   const [completionProgress, setCompletionProgress] = useState(0);
@@ -93,6 +98,18 @@ export const CompleteRouteModal: React.FC<CompleteRouteModalProps> = ({
     }
   };
 
+  const renderGamificationRewards = () => {
+    if (!completionResult?.gamification) return null;
+
+    return (
+      <div className="mt-4">
+        <RouteCompletionRewards 
+          gamificationResults={completionResult.gamification}
+        />
+      </div>
+    );
+  };
+
   const renderTerritoryStatus = () => {
     if (!completionResult) return null;
 
@@ -108,6 +125,7 @@ export const CompleteRouteModal: React.FC<CompleteRouteModalProps> = ({
           territoryResult={territory_claim}
           conflicts={territory_conflicts}
           conflictResolution={conflict_resolution}
+          gamificationResults={completionResult.gamification}
         />
         
         {/* Territory claiming retry button for failed claims */}
@@ -222,7 +240,7 @@ export const CompleteRouteModal: React.FC<CompleteRouteModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {hasSuccessfulCompletion && (
@@ -236,6 +254,17 @@ export const CompleteRouteModal: React.FC<CompleteRouteModalProps> = ({
             )}
             {completionResult ? 'Route Completed' : 'Complete Route'}
           </DialogTitle>
+          
+          {/* Show gamification rewards indicator in header */}
+          {completionResult?.gamification && (
+            <div className="flex items-center gap-1 text-sm text-blue-600">
+              <Trophy className="h-4 w-4" />
+              +{completionResult.gamification.route_completion.xp_gained} XP earned
+              {completionResult.gamification.route_completion.level_up && (
+                <span className="ml-1 text-purple-600">• Level up!</span>
+              )}
+            </div>
+          )}
           
           {/* Show territory success indicator in header */}
           {hasTerritorySuccess && (
@@ -254,19 +283,32 @@ export const CompleteRouteModal: React.FC<CompleteRouteModalProps> = ({
           )}
         </DialogHeader>
 
-        <div className="py-4 space-y-4">
-          <div>
-            <Input
-              placeholder="Enter route name"
-              value={routeName}
-              onChange={(e) => setRouteName(e.target.value)}
-              disabled={isFormDisabled}
+        <div className="flex gap-4 h-[500px]">
+          {/* Map Section */}
+          <div className="flex-1 h-full">
+            <RouteCompletionMap 
+              coordinates={coordinates}
+              completionResult={completionResult}
+              className="rounded-lg"
             />
           </div>
 
-          {renderCompletionProgress()}
-          {renderTerritoryStatus()}
-          {renderCompletionError()}
+          {/* Form Section */}
+          <div className="w-80 space-y-4 overflow-y-auto">
+            <div>
+              <Input
+                placeholder="Enter route name"
+                value={routeName}
+                onChange={(e) => setRouteName(e.target.value)}
+                disabled={isFormDisabled}
+              />
+            </div>
+
+            {renderCompletionProgress()}
+            {renderGamificationRewards()}
+            {renderTerritoryStatus()}
+            {renderCompletionError()}
+          </div>
         </div>
 
         <DialogFooter className="flex gap-2">

@@ -20,6 +20,7 @@ L.Marker.prototype.options.icon = DefaultIcon;
 
 const MapPreview = () => {
   const [position, setPosition] = useState<[number, number] | null>(null);
+  const [sample, setSample] = useState<Array<{ id: string; lat: number; lng: number; name?: string }>>([]);
 
   useEffect(() => {
     if ("geolocation" in navigator) {
@@ -34,6 +35,21 @@ const MapPreview = () => {
       );
     }
   }, []);
+
+  useEffect(() => {
+    // Fetch a few nearby territories as sample markers
+    (async () => {
+      try {
+        const lat = position?.[0] ?? 40.7128;
+        const lng = position?.[1] ?? -74.0060;
+        const res: any = await (await import('@/lib/api')).GatewayAPI.getNearbyTerritories(lat, lng, 3000);
+        if (res?.ok && Array.isArray(res.data)) {
+          const markers = res.data.slice(0, 3).map((t: any) => ({ id: String(t.id), lat: (t.boundary_coordinates?.[0]?.latitude ?? lat), lng: (t.boundary_coordinates?.[0]?.longitude ?? lng), name: t.name }));
+          setSample(markers);
+        }
+      } catch {}
+    })();
+  }, [position]);
 
   const center: [number, number] | null = position ? [position[0], position[1]] : null;
   const TILE_URL = (import.meta as any)?.env?.VITE_MAP_TILE_URL ??
@@ -75,6 +91,11 @@ const MapPreview = () => {
                       <Marker position={center}>
                         <Popup>You are here</Popup>
                       </Marker>
+                      {sample.map(s => (
+                        <Marker key={s.id} position={[s.lat, s.lng] as [number, number]}>
+                          <Popup>{s.name || `Territory ${s.id.slice(0,8)}`}</Popup>
+                        </Marker>
+                      ))}
                       {/* Themed overlay for map styling (above tiles) */}
                       <div className="absolute inset-0 pointer-events-none z-10 bg-gradient-to-br from-primary/8 via-transparent to-territory-claimed/12 mix-blend-soft-light" />
                       <div className="absolute inset-0 pointer-events-none z-10 border border-primary/20 rounded-b-lg" />

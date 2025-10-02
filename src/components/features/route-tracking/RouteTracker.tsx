@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Play, Square, Pause, MapPin, AlertTriangle } from "lucide-react";
 import { useRouteTracker } from "@/hooks/useRouteTracker";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/contexts/AuthContext";
 import { RouteTrackerProps } from "./types";
 import GPSStatus from "./GPSStatus";
 import RouteProgress from "./RouteProgress";

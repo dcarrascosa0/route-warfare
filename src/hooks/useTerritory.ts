@@ -7,14 +7,6 @@ import { GatewayAPI } from "@/lib/api";
 import { queryKeys, invalidateQueries } from '@/lib/query';
 import { useAuth } from '@/contexts/AuthContext';
 import type { 
-  Territory,
-  UserTerritoryStatistics,
-  GlobalTerritoryStatistics,
-  TerritoryLeaderboard,
-  TerritoryPreview,
-  EnhancedTerritoryEligibilityValidation,
-  TerritoryStatisticsResponse,
-  TerritoryPreviewResponse,
   GeoPoint
 } from '@/lib/api/types';
 
@@ -61,19 +53,7 @@ export const useTerritoriesMap = (params?: Record<string, string | number | bool
   });
 };
 
-export const useContestedTerritories = () => {
-  return useQuery({
-    queryKey: queryKeys.contestedTerritories(),
-    queryFn: async () => {
-      const result = await GatewayAPI.getContestedTerritories();
-      if (!result.ok) {
-        throw result;
-      }
-      return result.data;
-    },
-    refetchInterval: 15000, // Refetch every 15 seconds for contested territories
-  });
-};
+
 
 export const useNearbyTerritories = (latitude: number, longitude: number, radius: number = 5000) => {
   return useQuery({
@@ -188,40 +168,7 @@ export const useTerritoryStatistics = (userId: string) => {
   });
 };
 
-// Territory Leaderboard Hooks
-export const useTerritoryLeaderboard = (
-  metric: string = "total_area",
-  limit: number = 50,
-  offset: number = 0
-) => {
-  return useQuery({
-    queryKey: queryKeys.territoryLeaderboard(metric, limit, offset),
-    queryFn: async () => {
-      const result = await GatewayAPI.getTerritoryLeaderboard(metric, limit, offset);
-      if (!result.ok) {
-        throw result;
-      }
-      return result.data;
-    },
-    refetchInterval: 30000, // Refetch every 30 seconds for leaderboards
-  });
-};
 
-export const useLeaderboardByArea = (limit: number = 50, offset: number = 0) => {
-  return useTerritoryLeaderboard("total_area", limit, offset);
-};
-
-export const useLeaderboardByCount = (limit: number = 50, offset: number = 0) => {
-  return useTerritoryLeaderboard("territory_count", limit, offset);
-};
-
-export const useLeaderboardByActivity = (limit: number = 50, offset: number = 0) => {
-  return useTerritoryLeaderboard("recent_activity", limit, offset);
-};
-
-export const useLeaderboardByAverageArea = (limit: number = 50, offset: number = 0) => {
-  return useTerritoryLeaderboard("average_area", limit, offset);
-};
 
 // Territory Validation Hooks
 export const useRouteTerritoryEligibility = (routeId: string) => {
@@ -262,7 +209,6 @@ export const useClaimTerritory = () => {
       if (user?.id) {
         invalidateQueries.territories(queryClient, user.id);
         invalidateQueries.territoryStatistics(queryClient, user.id);
-        invalidateQueries.territoryLeaderboard(queryClient);
         invalidateQueries.userProfile(queryClient, user.id);
         invalidateQueries.leaderboard(queryClient);
       }
@@ -318,30 +264,12 @@ export const useTerritoryDashboard = (userId: string) => {
   const territories = useUserTerritories(userId);
   const statistics = useUserTerritoryStatistics(userId);
   const globalStats = useGlobalTerritoryStatistics();
-  const leaderboard = useTerritoryLeaderboard();
 
   return {
     territories,
     statistics,
     globalStats,
-    leaderboard,
-    isLoading: territories.isLoading || statistics.isLoading || globalStats.isLoading || leaderboard.isLoading,
-    error: territories.error || statistics.error || globalStats.error || leaderboard.error,
-  };
-};
-
-export const useTerritoryLeaderboards = () => {
-  const byArea = useLeaderboardByArea();
-  const byCount = useLeaderboardByCount();
-  const byActivity = useLeaderboardByActivity();
-  const byAverageArea = useLeaderboardByAverageArea();
-
-  return {
-    byArea,
-    byCount,
-    byActivity,
-    byAverageArea,
-    isLoading: byArea.isLoading || byCount.isLoading || byActivity.isLoading || byAverageArea.isLoading,
-    error: byArea.error || byCount.error || byActivity.error || byAverageArea.error,
+    isLoading: territories.isLoading || statistics.isLoading || globalStats.isLoading,
+    error: territories.error || statistics.error || globalStats.error,
   };
 };

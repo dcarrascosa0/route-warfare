@@ -69,6 +69,38 @@ export interface ConflictResolution {
   total_conflicts: number;
 }
 
+export interface GamificationReward {
+  xp_gained: number;
+  level_up?: {
+    old_level: number;
+    new_level: number;
+    rewards?: any[];
+  };
+  achievements_unlocked?: any[];
+  streak_bonus?: number;
+}
+
+export interface PersonalBestResult {
+  type: string;
+  xp_result: GamificationReward;
+  improvement_data: {
+    new_value: number;
+    previous_value: number;
+    improvement_percentage: number;
+  };
+}
+
+export interface GamificationResults {
+  route_completion?: GamificationReward;
+  territory_claim?: GamificationReward;
+  personal_bests?: PersonalBestResult[];
+  user_profile: {
+    level_info: any;
+    xp_summary: any;
+    streak_info: any;
+  };
+}
+
 export interface CompleteRouteResponse extends Route {
   // Territory claiming results
   territory_claim_status?: 'success' | 'blocked' | 'failed' | 'ineligible' | 'error';
@@ -81,6 +113,9 @@ export interface CompleteRouteResponse extends Route {
     reason: string;
     details: Record<string, any>;
   };
+  
+  // Gamification results
+  gamification?: GamificationResults;
 }
 
 export interface RouteStatistics {

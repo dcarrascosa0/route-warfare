@@ -48,6 +48,19 @@ const FeaturesSection = () => {
     }
   ];
 
+  const colorTextMap: Record<string, string> = {
+    'primary': 'text-primary',
+    'territory-claimed': 'text-territory-claimed',
+    'territory-contested': 'text-territory-contested',
+    'territory-neutral': 'text-territory-neutral',
+  };
+  const colorBg20Map: Record<string, string> = {
+    'primary': 'bg-primary/20',
+    'territory-claimed': 'bg-territory-claimed/20',
+    'territory-contested': 'bg-territory-contested/20',
+    'territory-neutral': 'bg-territory-neutral/20',
+  };
+
   return (
     <section className="py-20 px-6 bg-card/50">
       <div className="max-w-6xl mx-auto">
@@ -70,8 +83,8 @@ const FeaturesSection = () => {
               <Card key={index} className="bg-card/80 border-border/50 hover:shadow-glow transition-all duration-300 group">
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4">
-                    <div className={`flex items-center justify-center w-12 h-12 rounded-lg bg-${feature.color}/20 group-hover:shadow-territory transition-all duration-300`}>
-                      <IconComponent className={`w-6 h-6 text-${feature.color}`} />
+                    <div className={`flex items-center justify-center w-12 h-12 rounded-lg ${colorBg20Map[feature.color] || 'bg-primary/20'} group-hover:shadow-territory transition-all duration-300`}>
+                      <IconComponent className={`w-6 h-6 ${colorTextMap[feature.color] || 'text-primary'}`} />
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">

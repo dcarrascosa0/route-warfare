@@ -5,7 +5,7 @@
 export * from './common';
 export * from './auth';
 export * from './routes';
-export type { 
+export type {
   Territory,
   TerritoryMapResponse,
   UserTerritoryStatistics,
@@ -16,8 +16,6 @@ export type {
   TerritoryEligibilityValidation,
   EnhancedTerritoryEligibilityValidation,
   TerritoryValidationDetails,
-  DetailedTerritoryConflict,
-  TerritoryConflictResolution,
   EnhancedTerritoryPreview,
   TerritoryStatisticsResponse,
   TerritoryPreviewResponse
@@ -26,4 +24,44 @@ export type { LeaderboardEntry as TerritoryLeaderboardEntry } from './territorie
 export * from './territory-preview';
 export * from './users';
 export * from './notifications';
-export * from './leaderboard';
+
+// Export leaderboard types explicitly to control LeaderboardEntry export
+export type {
+  LeaderboardEntry,
+  LeaderboardResponse,
+  LeaderboardStats,
+  TerritoryLeaderboardCategory
+} from './leaderboard';
+
+// Export gamification types with LeaderboardEntry aliased to avoid conflict
+export type {
+  GamificationProfile,
+  UserStatistics,
+  UserProgress,
+  UserComparison,
+  UserRanking,
+  StreakInformation,
+  LevelInfo,
+  XPSummary,
+  LevelMilestone,
+  ProgressionCurve,
+  Achievement,
+  UserAchievement,
+  AchievementRarity,
+  AchievementNotification,
+  ChallengeNotification,
+  GamificationNotification,
+  UserComparisonRequest,
+  ProgressHistoryRequest,
+  GamificationProfileResponse,
+  UserStatisticsResponse,
+  UserProgressResponse,
+  UserComparisonResponse,
+  UserRankingResponse,
+  StreakInformationResponse,
+  ProgressSummaryResponse,
+  LeaderboardResponse as GamificationLeaderboardResponse,
+  StreakMilestone,
+  StreakStatistics,
+  LeaderboardEntry as GamificationLeaderboardEntry
+} from './gamification';

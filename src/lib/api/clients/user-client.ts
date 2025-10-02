@@ -30,7 +30,7 @@ export class UserApiClient extends BaseApiClient {
     return this.request<unknown>(`/users/${encodeURIComponent(userId)}/achievements/${encodeURIComponent(achievementId)}/progress`);
   }
 
-  async updateUserProfile(userId: string, profile: { username: string; email: string }) {
+  async updateUserProfile(userId: string, profile: { username: string; email: string; bio?: string }) {
     return this.request(`/users/${encodeURIComponent(userId)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },

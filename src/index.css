@@ -146,6 +146,51 @@ All colors MUST be HSL.
     padding-bottom: env(safe-area-inset-bottom);
   }
   
+  /* Mobile bottom navigation padding */
+  .pb-bottom-nav {
+    padding-bottom: calc(120px + env(safe-area-inset-bottom));
+  }
+  
+  @media (min-width: 768px) {
+    .pb-bottom-nav {
+      padding-bottom: 0;
+    }
+  }
+  
+  /* Ensure bottom navigation is always visible */
+  @supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .pb-bottom-nav {
+      padding-bottom: calc(100px + env(safe-area-inset-bottom));
+    }
+  }
+  
+  /* Mobile viewport fixes */
+  @media (max-width: 767px) {
+    body {
+      /* Prevent horizontal scroll */
+      overflow-x: hidden;
+      /* Ensure no margin/padding affects bottom nav positioning */
+      margin: 0;
+      padding: 0;
+    }
+    
+    /* Ensure minimum viewport height accounting for mobile browsers */
+    .min-h-screen {
+      min-height: 100vh;
+      min-height: 100dvh; /* Dynamic viewport height for modern browsers */
+    }
+    
+    /* Force bottom navigation to be fully visible */
+    .bottom-nav-mobile {
+      bottom: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      position: fixed !important;
+      z-index: 9999 !important;
+      margin: 0 !important;
+    }
+  }
+  
   /* Smooth animations */
   .animate-slide-up {
     animation: slide-up 0.3s ease-out;

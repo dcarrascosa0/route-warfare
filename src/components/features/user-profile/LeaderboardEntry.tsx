@@ -13,6 +13,10 @@ import {
   Route,
   Target,
   MapPin,
+  Zap,
+  Award,
+  Flame,
+  Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +30,11 @@ export interface LeaderboardPlayer {
   winRate: string;
   level: number;
   distance: string;
+  xp: number;
+  achievements: number;
+  streak: number;
+  prestige: number;
+  title?: string;
   trend: "up" | "down" | "stable";
   rankChange?: number;
   badge: string | null;
@@ -33,12 +42,11 @@ export interface LeaderboardPlayer {
   userId?: string;
   avatar?: string;
   lastActive?: string;
-  achievements?: number;
 }
 
 interface LeaderboardEntryProps {
   player: LeaderboardPlayer;
-  category: "territory" | "routes" | "winrate";
+  category: "territory" | "routes" | "xp" | "level" | "achievements" | "streak" | "distance";
   showTrend?: boolean;
   showStats?: boolean;
   compact?: boolean;
@@ -59,12 +67,12 @@ export const LeaderboardEntry: React.FC<LeaderboardEntryProps> = ({
     if (badge === "Crown") return <Crown className="w-6 h-6 text-yellow-500" />;
     if (badge === "Trophy") return <Trophy className="w-6 h-6 text-gray-400" />;
     if (badge === "Medal") return <Medal className="w-6 h-6 text-amber-600" />;
-    
+
     // Special styling for top 3 ranks
     if (rank === 1) return <Crown className="w-6 h-6 text-yellow-500" />;
     if (rank === 2) return <Trophy className="w-6 h-6 text-gray-400" />;
     if (rank === 3) return <Medal className="w-6 h-6 text-amber-600" />;
-    
+
     return <span className="text-lg font-bold text-muted-foreground">#{rank}</span>;
   };
 
@@ -107,8 +115,17 @@ export const LeaderboardEntry: React.FC<LeaderboardEntryProps> = ({
         return player.totalArea;
       case "routes":
         return player.routes.toString();
-      case "winrate":
-        return player.winRate;
+
+      case "xp":
+        return `${player.xp.toLocaleString()} XP`;
+      case "level":
+        return `Level ${player.level}`;
+      case "achievements":
+        return `${player.achievements} achievements`;
+      case "streak":
+        return `${player.streak} days`;
+      case "distance":
+        return player.distance;
       default:
         return player.score.toString();
     }
@@ -120,7 +137,16 @@ export const LeaderboardEntry: React.FC<LeaderboardEntryProps> = ({
         return <MapPin className="w-4 h-4" />;
       case "routes":
         return <Route className="w-4 h-4" />;
-      case "winrate":
+
+      case "xp":
+        return <Zap className="w-4 h-4" />;
+      case "level":
+        return <Crown className="w-4 h-4" />;
+      case "achievements":
+        return <Award className="w-4 h-4" />;
+      case "streak":
+        return <Flame className="w-4 h-4" />;
+      case "distance":
         return <Target className="w-4 h-4" />;
       default:
         return <Trophy className="w-4 h-4" />;
@@ -134,37 +160,38 @@ export const LeaderboardEntry: React.FC<LeaderboardEntryProps> = ({
   };
 
   const EntryContent = () => (
-    <div 
+    <div
       className={cn(
-        "flex items-center gap-4 p-4 rounded-lg border transition-all duration-200",
-        player.isCurrentUser 
-          ? "bg-primary/5 border-primary/20 shadow-sm" 
+        "h-[72px] flex items-center p-4 rounded-lg border transition-all duration-200",
+        player.isCurrentUser
+          ? "bg-primary/5 border-primary/20 shadow-sm"
           : "hover:bg-muted/50 hover:shadow-sm",
-        compact && "p-3",
+        compact && "h-[60px] p-3",
         onPlayerClick && "cursor-pointer",
         className
       )}
       onClick={handleClick}
     >
-      {/* Rank */}
-      <div className="flex items-center justify-center w-12 h-12">
-        {getRankIcon(player.rank, player.badge)}
-      </div>
-
-      {/* Avatar and Name */}
+      {/* Left Section - Rank, Avatar, Name */}
       <div className="flex items-center gap-3 flex-1 min-w-0">
-        <Avatar className={compact ? "h-8 w-8" : "h-10 w-10"}>
-          {player.avatar ? (
-            <img src={player.avatar} alt={player.name} />
-          ) : (
-            <AvatarFallback>
-              <User className="w-4 h-4" />
-            </AvatarFallback>
-          )}
-        </Avatar>
-        
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          {/* Rank */}
+          <div className="flex items-center justify-center w-10 h-10 flex-shrink-0">
+            {getRankIcon(player.rank, player.badge)}
+          </div>
+
+          {/* Avatar */}
+          <Avatar className={compact ? "h-8 w-8" : "h-9 w-9 flex-shrink-0"}>
+            {player.avatar ? (
+              <img src={player.avatar} alt={player.name} />
+            ) : (
+              <AvatarFallback>
+                <User className="w-4 h-4" />
+              </AvatarFallback>
+            )}
+          </Avatar>
+
+          {/* Name */}
+          <div className="flex-1 min-w-0">
             <h3 className={cn(
               "font-semibold truncate",
               compact ? "text-sm" : "text-base",
@@ -172,67 +199,55 @@ export const LeaderboardEntry: React.FC<LeaderboardEntryProps> = ({
             )}>
               {player.name}
             </h3>
-            {player.isCurrentUser && (
-              <Badge variant="secondary" className="text-xs">
-                You
+            {/* Badges and submetrics on subline */}
+            <div className="flex items-center gap-2 mt-1">
+              {player.isCurrentUser && (
+                <Badge variant="secondary" className="text-xs opacity-70">
+                  You
+                </Badge>
+              )}
+              <Badge variant="outline" className="text-xs opacity-60">
+                Level {player.level}
               </Badge>
-            )}
-            <Badge className={cn("text-xs", getRankBadgeColor(player.rank))} variant="outline">
-              Level {player.level}
-            </Badge>
+              {showStats && !compact && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>{player.zones} zone{player.zones !== 1 ? 's' : ''}</span>
+                  <span>•</span>
+                  <span>{player.totalArea}</span>
+                </div>
+              )}
+            </div>
           </div>
-          
-          {!compact && player.lastActive && (
-            <p className="text-xs text-muted-foreground">
-              Last active: {player.lastActive}
-            </p>
-          )}
         </div>
-      </div>
 
-      {/* Category Value */}
-      <div className="text-right">
-        <div className="flex items-center gap-2">
-          {getCategoryIcon()}
-          <span className={cn(
-            "font-bold",
-            compact ? "text-sm" : "text-lg",
+      {/* Right Section - Primary Metric in Large Type */}
+      <div className="text-right flex-shrink-0">
+          <div className={cn(
+            "font-bold text-foreground",
+            compact ? "text-xl" : "text-3xl",
             player.isCurrentUser && "text-primary"
           )}>
             {getCategoryValue()}
-          </span>
-        </div>
-        {!compact && (
-          <p className="text-xs text-muted-foreground capitalize">
-            {category === "winrate" ? "Win Rate" : category}
-          </p>
-        )}
-      </div>
-
-      {/* Trend */}
-      {showTrend && (
-        <div className="flex items-center">
-          {getTrendIcon(player.trend, player.rankChange)}
-        </div>
-      )}
-
-      {/* Stats */}
-      {showStats && !compact && (
-        <div className="hidden md:flex flex-col gap-1 text-xs text-muted-foreground min-w-0">
-          <div className="flex items-center gap-1">
-            <MapPin className="w-3 h-3" />
-            <span>{player.zones} zones</span>
           </div>
-          <div className="flex items-center gap-1">
-            <Route className="w-3 h-3" />
-            <span>{player.distance}</span>
-          </div>
-          {player.achievements && (
-            <div className="flex items-center gap-1">
-              <Trophy className="w-3 h-3" />
-              <span>{player.achievements} achievements</span>
+          {showTrend && (
+            <div className="flex items-center justify-end mt-1">
+              {getTrendIcon(player.trend, player.rankChange)}
             </div>
           )}
+        </div>
+
+
+
+      {/* Compact stats for mobile */}
+      {showStats && compact && (
+        <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+          <span>{player.zones}z</span>
+          <span>•</span>
+          <span>{player.routes}r</span>
+          <span>•</span>
+          <Badge variant="outline" className="text-xs opacity-60">
+            L{player.level}
+          </Badge>
         </div>
       )}
     </div>

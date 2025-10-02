@@ -145,7 +145,7 @@ export const queryKeys = {
   territoryPreview: (coordinates: Array<{ longitude: number; latitude: number }>) => ['territories', 'preview', coordinates] as const,
   territoryStatistics: (userId: string) => ['territories', 'statistics', userId] as const,
   globalTerritoryStatistics: () => ['territories', 'statistics', 'global'] as const,
-  territoryLeaderboard: (metric: string, limit: number, offset: number) => ['territories', 'leaderboard', metric, limit, offset] as const,
+
   territoryValidation: (routeId: string) => ['territories', 'validation', routeId] as const,
   
   // Leaderboard
@@ -191,9 +191,7 @@ export const invalidateQueries = {
     }
   },
 
-  territoryLeaderboard: (queryClient: QueryClient) => {
-    queryClient.invalidateQueries({ queryKey: ['territories', 'leaderboard'] });
-  },
+
 
   leaderboard: (queryClient: QueryClient) => {
     queryClient.invalidateQueries({ queryKey: ['leaderboard'] });

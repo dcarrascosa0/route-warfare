@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { useWebSocketManager, WebSocketMessage } from '@/hooks/useWebSocketManager';
-import { useAuth } from '@/hooks/useAuth';
+import { useWebSocketManager } from '@/hooks/useWebSocketManager';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Notification types based on backend schemas
 export interface Notification {
@@ -131,7 +131,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
 
   const contextValue: NotificationContextType = {
     isConnected: wsHook.isConnected,
-    connectionError: wsHook.connectionState.error || null,
+    connectionError: null,
     connectionId: null, // This is not available in the new hook
     connectionHealth: wsHook.health,
     notifications,

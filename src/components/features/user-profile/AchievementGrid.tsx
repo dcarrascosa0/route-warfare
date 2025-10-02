@@ -14,10 +14,11 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Achievement } from './types';
+import type { UserAchievement as GamificationUserAchievement } from '@/lib/api/types/gamification';
 import { Button } from '@/components/ui/button';
 
 interface AchievementGridProps {
-  achievements: Achievement[];
+  achievements: Achievement[] | GamificationUserAchievement[];
   className?: string;
 }
 
@@ -45,6 +46,31 @@ const rarityBadgeColors = {
   rare: 'bg-blue-100 text-blue-800',
   epic: 'bg-purple-100 text-purple-800',
   legendary: 'bg-yellow-100 text-yellow-800',
+};
+
+// Helper function to normalize achievements
+const normalizeAchievement = (achievement: Achievement | GamificationUserAchievement): Achievement => {
+  // If it's already a legacy Achievement, return as is
+  if ('icon' in achievement && 'category' in achievement) {
+    return achievement as Achievement;
+  }
+  
+  // If it's a GamificationUserAchievement, convert it
+  const gamificationAchievement = achievement as GamificationUserAchievement;
+  return {
+    id: gamificationAchievement.achievement_id,
+    name: gamificationAchievement.achievement?.name || 'Achievement',
+    description: gamificationAchievement.achievement?.description || 'Achievement description',
+    icon: 'trophy', // Default icon
+    category: gamificationAchievement.achievement?.category || 'general',
+    points: gamificationAchievement.achievement?.xp_reward || 0,
+    unlocked_at: gamificationAchievement.earned_at,
+    progress: gamificationAchievement.completion_percentage !== undefined && gamificationAchievement.completion_percentage < 100 ? {
+      current: Math.floor(gamificationAchievement.completion_percentage),
+      target: 100,
+      percentage: gamificationAchievement.completion_percentage
+    } : undefined
+  };
 };
 
 const AchievementGrid = ({ achievements, className }: AchievementGridProps) => {
@@ -117,7 +143,11 @@ const AchievementGrid = ({ achievements, className }: AchievementGridProps) => {
     },
   ];
 
-  const displayAchievements = achievements.length > 0 ? achievements : sampleAchievements;
+  const normalizedAchievements = achievements.length > 0 
+    ? achievements.map(normalizeAchievement)
+    : sampleAchievements;
+  
+  const displayAchievements = normalizedAchievements;
 
   const getRarityFromPoints = (points: number): keyof typeof rarityColors => {
     if (points >= 500) return 'legendary';

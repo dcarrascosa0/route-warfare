@@ -197,4 +197,27 @@
     border-color: #00bfff !important;
     background-color: rgba(0, 191, 255, 0.3) !important;
   }
+}/* R
+oute completion map styling */
+.route-completion-line {
+  filter: drop-shadow(0 0 8px #f97316) brightness(1.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.route-completion-line:hover {
+  filter: drop-shadow(0 0 12px #f97316) brightness(1.1);
+}
+
+/* Remove default Leaflet controls styling for completion map */
+.rw-map .leaflet-control-container .leaflet-control-zoom {
+  display: none !important;
+}
+
+.rw-map .leaflet-control-container .leaflet-control-attribution {
+  display: none !important;
+}
+
+/* Hide all controls in route completion map */
+.territory-map-container .leaflet-control-container {
+  display: none !important;
 }

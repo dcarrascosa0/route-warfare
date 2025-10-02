@@ -205,19 +205,6 @@ export const useTerritory = (territoryId: string) => {
   });
 };
 
-export const useContestedTerritories = () => {
-  return useQuery({
-    queryKey: queryKeys.contestedTerritories(),
-    queryFn: async () => {
-      const result = await GatewayAPI.getContestedTerritories();
-      if (!result.ok) {
-        throw result;
-      }
-      return result.data;
-    },
-    refetchInterval: 15000, // Refetch every 15 seconds for contested territories
-  });
-};
 
 export const useNearbyTerritories = (latitude: number, longitude: number, radius: number = 5000) => {
   return useQuery({
@@ -317,40 +304,7 @@ export const useTerritoryStatistics = (userId: string) => {
   });
 };
 
-// Territory leaderboard hooks
-export const useTerritoryLeaderboard = (
-  metric: string = "total_area",
-  limit: number = 50,
-  offset: number = 0
-) => {
-  return useQuery({
-    queryKey: queryKeys.territoryLeaderboard(metric, limit, offset),
-    queryFn: async () => {
-      const result = await GatewayAPI.getTerritoryLeaderboard(metric, limit, offset);
-      if (!result.ok) {
-        throw result;
-      }
-      return result.data;
-    },
-    refetchInterval: 30000, // Refetch every 30 seconds for leaderboards
-  });
-};
 
-export const useLeaderboardByArea = (limit: number = 50, offset: number = 0) => {
-  return useTerritoryLeaderboard("total_area", limit, offset);
-};
-
-export const useLeaderboardByCount = (limit: number = 50, offset: number = 0) => {
-  return useTerritoryLeaderboard("territory_count", limit, offset);
-};
-
-export const useLeaderboardByActivity = (limit: number = 50, offset: number = 0) => {
-  return useTerritoryLeaderboard("recent_activity", limit, offset);
-};
-
-export const useLeaderboardByAverageArea = (limit: number = 50, offset: number = 0) => {
-  return useTerritoryLeaderboard("average_area", limit, offset);
-};
 
 // Territory validation hooks
 export const useRouteTerritoryEligibility = (routeId: string) => {
@@ -367,38 +321,7 @@ export const useRouteTerritoryEligibility = (routeId: string) => {
   });
 };
 
-// Leaderboard queries
-export const useLeaderboard = (
-  category: string = 'territory',
-  period: string = 'ALL_TIME',
-  start: number = 0,
-  limit: number = 50
-) => {
-  return useQuery({
-    queryKey: queryKeys.leaderboard(category, period, start, limit),
-    queryFn: async () => {
-      const result = await GatewayAPI.getLeaderboard(category, period, start, limit);
-      if (!result.ok) {
-        throw result;
-      }
-      return result.data;
-    },
-    refetchInterval: 60000, // Refetch every minute for leaderboards
-  });
-};
 
-export const useLeaderboardStats = (category: string) => {
-  return useQuery({
-    queryKey: queryKeys.leaderboardStats(category),
-    queryFn: async () => {
-      const result = await GatewayAPI.leaderboardStats(category);
-      if (!result.ok) {
-        throw result;
-      }
-      return result.data;
-    },
-  });
-};
 
 // Route mutations
 export const useStartRoute = () => {

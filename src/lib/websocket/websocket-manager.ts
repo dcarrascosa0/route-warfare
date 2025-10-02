@@ -248,6 +248,63 @@ export class WebSocketManager extends EventEmitter {
       }
     });
   }
+
+  // Gamification event handlers
+  onXPGained(callback: (data: any) => void): void {
+    this.on('message', (message: WebSocketMessage) => {
+      if (message.type === 'xp_gained') {
+        callback(message.data);
+      }
+    });
+  }
+
+  onLevelUp(callback: (data: any) => void): void {
+    this.on('message', (message: WebSocketMessage) => {
+      if (message.type === 'level_up') {
+        callback(message.data);
+      }
+    });
+  }
+
+  onAchievementUnlocked(callback: (data: any) => void): void {
+    this.on('message', (message: WebSocketMessage) => {
+      if (message.type === 'achievement_unlocked') {
+        callback(message.data);
+      }
+    });
+  }
+
+  onChallengeCompleted(callback: (data: any) => void): void {
+    this.on('message', (message: WebSocketMessage) => {
+      if (message.type === 'challenge_completed') {
+        callback(message.data);
+      }
+    });
+  }
+
+  onStreakUpdated(callback: (data: any) => void): void {
+    this.on('message', (message: WebSocketMessage) => {
+      if (message.type === 'streak_updated') {
+        callback(message.data);
+      }
+    });
+  }
+
+  onGamificationLeaderboardUpdate(callback: (data: any) => void): void {
+    this.on('message', (message: WebSocketMessage) => {
+      if (message.type === 'leaderboard_update' || message.type === 'global_leaderboard_updates') {
+        callback(message.data);
+      }
+    });
+  }
+
+  onSeasonalUpdate(callback: (data: any) => void): void {
+    this.on('message', (message: WebSocketMessage) => {
+      if (message.type === 'seasonal_update' || message.type === 'seasonal_updates') {
+        callback(message.data);
+      }
+    });
+  }
 }
 
 export const createWebSocketManager = (config: ConnectionConfig): WebSocketManager => {

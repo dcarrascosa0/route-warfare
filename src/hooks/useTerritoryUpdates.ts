@@ -63,11 +63,8 @@ export const useTerritoryUpdates = (
         // Status changes
         if (previous.status !== territory.status) {
           hasSignificantChange = true;
-          if (territory.status === 'contested') {
-            updateType = 'territory_contested';
-          } else if (territory.status === 'active' && previous.status === 'contested') {
-            updateType = 'territory_claimed'; // Conflict resolved
-          }
+          // Exclusive ownership model: status transitions to 'claimed' or 'neutral' only
+          updateType = 'territory_claimed';
         }
 
         // Ownership changes
@@ -86,11 +83,7 @@ export const useTerritoryUpdates = (
         }
 
         // Contest count changes (indicates new attacks)
-        if (previous.contest_count !== territory.contest_count && 
-            territory.contest_count && territory.contest_count > (previous.contest_count || 0)) {
-          hasSignificantChange = true;
-          updateType = 'territory_attacked';
-        }
+        // contest_count removed in exclusive model
 
         // Area changes (rare but possible with conflict resolution)
         if (previous.area_km2 !== territory.area_km2) {
@@ -155,7 +148,7 @@ export const useTerritoryUpdates = (
         const baseDelay = animationDuration;
         const importanceMultiplier = update.type === 'territory_attacked' ? 1.5 :
                                    update.type === 'territory_lost' ? 1.8 :
-                                   update.type === 'territory_contested' ? 1.3 : 1.0;
+                                   1.0;
         const staggerDelay = index * 200; // 200ms stagger between updates
         const totalDelay = baseDelay * importanceMultiplier + staggerDelay;
 

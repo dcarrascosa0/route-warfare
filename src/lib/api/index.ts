@@ -17,7 +17,15 @@ export { territoryClient } from './clients/territory-client';
 export { userClient } from './clients/user-client';
 export { leaderboardClient } from './clients/leaderboard-client';
 export { notificationClient } from './clients/notification-client';
+export { gamificationClient } from './clients/gamification-client';
+export { achievementsClient } from './clients/achievements-client';
 
 // Re-export utility functions for backward compatibility
-export { getNotificationsWsUrl } from './utils/websocket-utils';
+export { 
+  getNotificationsWsUrl, 
+  getTerritoryWsUrl, 
+  getGlobalTerritoryWsUrl,
+  getGamificationWsUrl,
+  getGlobalGamificationWsUrl 
+} from './utils/websocket-utils';
 export { normalizeRouteSummary, normalizeRouteDetail } from './utils/data-normalizers';

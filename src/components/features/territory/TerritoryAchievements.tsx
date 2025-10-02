@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -8,13 +8,10 @@ import {
     AlertCircle,
     Award,
     BarChart,
-    CheckCircle, Clock, Star, Crown
+    CheckCircle,
+    Star
 } from 'lucide-react';
-import {
-    useTerritoryLeaderboard,
-    useTerritoryLeaderboardStats,
-    useUserAchievements,
-} from '@/hooks/useTerritoryLeaderboard';
+import { useUserAchievements } from '@/hooks/useAchievements';
 import type { UserAchievement } from '@/lib/api/types';
 
 interface TerritoryAchievementsProps {
@@ -62,23 +59,15 @@ export const TerritoryAchievements: React.FC<TerritoryAchievementsProps> = ({
         }
     };
 
-    // Helper function to extract numeric values from progress fields
-    const getProgressValue = (value: any): number => {
-        if (typeof value === 'number') return value;
-        if (typeof value === 'object' && value !== null) {
-            return value.current || value.target || 0;
-        }
-        return 0;
+    // Helper function to check if achievement is earned
+    const isAchievementEarned = (achievement: UserAchievement): boolean => {
+        return !!achievement.earned_at;
     };
 
-    const getProgressPercentage = (achievement: UserAchievement) => {
-        if (achievement.is_earned) return 100;
-
-        const currentProgress = getProgressValue(achievement.progress);
-        const maxProgress = getProgressValue(achievement.max_progress) || 1;
-
-        if (maxProgress === 0) return 0;
-        return Math.min((currentProgress / maxProgress) * 100, 100);
+    // Helper function to get progress percentage
+    const getProgressPercentage = (achievement: UserAchievement): number => {
+        if (isAchievementEarned(achievement)) return 100;
+        return achievement.completion_percentage || 0;
     };
 
     if (isLoading) {
@@ -104,8 +93,8 @@ export const TerritoryAchievements: React.FC<TerritoryAchievementsProps> = ({
     }
 
     const achievements = achievementsData || [];
-    const completedAchievements = achievements.filter(a => a.is_earned);
-    const inProgressAchievements = achievements.filter(a => !a.is_earned);
+    const completedAchievements = achievements.filter(a => isAchievementEarned(a));
+    const inProgressAchievements = achievements.filter(a => !isAchievementEarned(a));
 
     if (compact) {
         return (
@@ -153,24 +142,24 @@ export const TerritoryAchievements: React.FC<TerritoryAchievementsProps> = ({
             <TooltipProvider>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                     {achievements.map((achievement) => (
-                        <Tooltip key={achievement.id} delayDuration={100}>
+                        <Tooltip key={achievement.achievement_id} delayDuration={100}>
                             <TooltipTrigger asChild>
-                                <Card className={`overflow-hidden transition-transform hover:scale-105 ${achievement.is_earned ? 'border-green-500 border-2' : ''}`}>
+                                <Card className={`overflow-hidden transition-transform hover:scale-105 ${isAchievementEarned(achievement) ? 'border-green-500 border-2' : ''}`}>
                                     <CardContent className="p-4 flex flex-col items-center text-center">
-                                        <div className={`mb-2 ${getCategoryColor(achievement.category)}`}>
-                                            {getCategoryIcon(achievement.category)}
+                                        <div className={`mb-2 ${getCategoryColor(achievement.achievement.category)}`}>
+                                            {getCategoryIcon(achievement.achievement.category)}
                                         </div>
-                                        <div className="font-semibold text-sm">{achievement.name}</div>
-                                        <div className="text-xs text-muted-foreground mt-1">{achievement.description}</div>
-                                        {showProgress && !achievement.is_earned && (
+                                        <div className="font-semibold text-sm">{achievement.achievement.name}</div>
+                                        <div className="text-xs text-muted-foreground mt-1">{achievement.achievement.description}</div>
+                                        {showProgress && !isAchievementEarned(achievement) && (
                                             <div className="w-full mt-2">
                                                 <Progress value={getProgressPercentage(achievement)} className="h-2" />
                                                 <div className="text-xs mt-1 text-muted-foreground">
-                                                    {getProgressValue(achievement.progress)} / {getProgressValue(achievement.max_progress) || 1}
+                                                    {Math.round(achievement.completion_percentage || 0)}%
                                                 </div>
                                             </div>
                                         )}
-                                        {achievement.is_earned && (
+                                        {isAchievementEarned(achievement) && (
                                             <div className="text-xs text-green-500 mt-2 font-semibold flex items-center">
                                                 <CheckCircle className="h-3 w-3 mr-1" />
                                                 Completed
@@ -180,9 +169,9 @@ export const TerritoryAchievements: React.FC<TerritoryAchievementsProps> = ({
                                 </Card>
                             </TooltipTrigger>
                             <TooltipContent>
-                                <p className="font-bold">{achievement.name}</p>
-                                <p>{achievement.description}</p>
-                                <p><span className="font-semibold">Category:</span> {achievement.category}</p>
+                                <p className="font-bold">{achievement.achievement.name}</p>
+                                <p>{achievement.achievement.description}</p>
+                                <p><span className="font-semibold">Category:</span> {achievement.achievement.category}</p>
                                 {achievement.earned_at && <p><span className="font-semibold">Completed on:</span> {new Date(achievement.earned_at).toLocaleDateString()}</p>}
                             </TooltipContent>
                         </Tooltip>

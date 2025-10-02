@@ -1,9 +1,10 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { MapContainer, TileLayer } from 'react-leaflet';
+import { MapContainer, TileLayer, Polygon } from 'react-leaflet';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { MapControls } from '@/components/common/MapControls';
-import { Maximize2, Minimize2, RotateCcw, ZoomIn, ZoomOut, Eye, EyeOff } from 'lucide-react';
+
+
 import { cn } from '@/lib/utils';
 import MapPanes from './components/MapPanes';
 import MapResizeFix from './components/MapResizeFix';
@@ -12,8 +13,12 @@ import AnimatedRoutePolyline from './components/AnimatedRoutePolyline';
 import TerritoryPreview from '../territory/TerritoryPreview';
 import TerritoryAreaDisplay from '../territory/TerritoryAreaDisplay';
 import { calculateBounds, calculateCenter, TILE_DARK_WITH_LABELS } from './utils/mapUtils';
+import { normalizeTerritoryRings } from '@/lib/geo/territory';
 import { useTerritoryPreviewManager } from '@/hooks/useTerritoryPreview';
 import { useTerritoryContext } from '@/contexts/TerritoryContext';
+import { useQuery } from '@tanstack/react-query';
+import { GatewayAPI } from '@/lib/api';
+import { queryKeys } from '@/lib/query';
 import type { RouteDetail } from '@/lib/api/types/routes';
 import type { Coordinate } from '@/lib/api/types/common';
 import L from 'leaflet'; // no named type imports
@@ -153,6 +158,9 @@ export default function EnhancedActiveRouteMap({
 
     // Territory preview state
     const [territoryPreviewVisible, setTerritoryPreviewVisible] = useState(territoryPreviewEnabled);
+    const [overlayMode, setOverlayMode] = useState<'mine' | 'all' | 'hidden'>(() => {
+        return (localStorage.getItem('rw.overlayMode') as any) || 'mine';
+    });
 
     // Enhanced coordinates with additional metadata
     const enhancedCoordinates = useMemo((): EnhancedGPSCoordinate[] => {
@@ -212,6 +220,40 @@ export default function EnhancedActiveRouteMap({
         }
     );
 
+    // Viewport-based territories fetch for overlay
+    const boundsToParams = useCallback((b: LeafletBounds | null) => {
+        if (!b) return undefined;
+        const sw = b.getSouthWest();
+        const ne = b.getNorthEast();
+        return {
+            min_latitude: sw.lat,
+            min_longitude: sw.lng,
+            max_latitude: ne.lat,
+            max_longitude: ne.lng,
+            zoom_level: mapInstance?.getZoom?.() ?? 16,
+            limit: 1000
+        } as any;
+    }, [mapInstance]);
+
+    const territoryParams = useMemo(() => boundsToParams(mapViewState.bounds), [mapViewState.bounds, boundsToParams]);
+
+    const { data: overlayData, isLoading: isOverlayLoading, isError: isOverlayError, error: overlayError } = useQuery({
+        queryKey: queryKeys.territoriesMap(territoryParams as any),
+        queryFn: async () => {
+            if (!territoryParams) return { territories: [] } as any;
+            const zoom = (territoryParams as any).zoom_level || 16;
+            if (zoom <= 9) {
+                const res = await GatewayAPI.territories.getTerritoriesMapSummary(zoom);
+                return res.ok ? res.data : { territories: [] };
+            }
+            const res = await GatewayAPI.territoriesMap(territoryParams);
+            return res.ok ? res.data : { territories: [] };
+        },
+        enabled: !!territoryParams && overlayMode !== 'hidden',
+        staleTime: 15000,
+        gcTime: 60000,
+    });
+
     // Calculate route statistics
     const routeStats = useMemo((): RouteStats => {
         const coordinates = enhancedCoordinates;
@@ -267,52 +309,26 @@ export default function EnhancedActiveRouteMap({
         };
     }, [enhancedCoordinates, currentLocation]);
 
-    // Handle fullscreen toggle
-    const handleFullscreenToggle = useCallback(() => {
-        if (!fullscreenEnabled) return;
-
-        setIsFullscreen(prev => {
-            const newFullscreen = !prev;
-            setMapViewState(prevState => ({
-                ...prevState,
-                isFullscreen: newFullscreen,
-            }));
-
-            // Trigger map resize after fullscreen change
-            setTimeout(() => {
-                if (mapInstance) {
-                    mapInstance.invalidateSize();
-                }
-            }, 100);
-
-            return newFullscreen;
-        });
-    }, [fullscreenEnabled, mapInstance]);
-
-    // Handle zoom controls
-    const handleZoomIn = useCallback(() => {
-        if (mapInstance) {
-            mapInstance.zoomIn();
+    // Memoize overlay features to reduce re-renders
+    const overlayFeatures = useMemo(() => {
+        if (overlayMode === 'hidden' || !overlayData?.territories) return [] as Array<{ id: string; isMine: boolean; positions: [number, number][][] }>;
+        const uid = userId;
+        const out: Array<{ id: string; isMine: boolean; positions: [number, number][][] }> = [];
+        for (const t of overlayData.territories as any[]) {
+            const ringsRaw = normalizeTerritoryRings(t);
+            if (!Array.isArray(ringsRaw) || ringsRaw.length === 0) continue;
+            const rings = ringsRaw
+                .map(r => r.map(c => [Number(c.latitude), Number(c.longitude)] as [number, number]))
+                .filter(r => Array.isArray(r) && r.length >= 3 && r.every(pt => Array.isArray(pt) && pt.length === 2 && isFinite(pt[0]) && isFinite(pt[1])));
+            if (rings.length === 0) continue;
+            const isMine = t.owner_id === uid;
+            if (overlayMode === 'mine' && !isMine) continue;
+            out.push({ id: t.id, isMine, positions: rings });
         }
-    }, [mapInstance]);
+        return out;
+    }, [overlayData, overlayMode, activeRoute]);
 
-    const handleZoomOut = useCallback(() => {
-        if (mapInstance) {
-            mapInstance.zoomOut();
-        }
-    }, [mapInstance]);
 
-    // Handle auto-fit to route bounds
-    const handleAutoFit = useCallback(() => {
-        if (mapInstance && mapViewState.bounds) {
-            mapInstance.fitBounds(mapViewState.bounds, { padding: [20, 20] });
-        }
-    }, [mapInstance, mapViewState.bounds]);
-
-    // Handle territory preview toggle
-    const handleTerritoryPreviewToggle = useCallback(() => {
-        setTerritoryPreviewVisible(prev => !prev);
-    }, []);
 
     // Handle territory preview click
     const handleTerritoryPreviewClick = useCallback((preview: any) => {
@@ -400,27 +416,18 @@ export default function EnhancedActiveRouteMap({
         }
     }, [enhancedCoordinates.length, routeStats.isClosedLoop, territoryPreviewEnabled, territoryPreviewVisible, territoryPreview]);
 
-    // Refresh territory preview when territory updates are received via WebSocket
+    // Refresh overlays and preview when territory updates are received via WebSocket
     useEffect(() => {
-        if (territoryPreviewEnabled && territoryContext.lastUpdate) {
-            // Refresh the route-based preview when territories change
-            territoryPreview.refreshRoutePreview();
+        if (territoryContext.lastUpdate) {
+            // Invalidate overlay query by updating key via bounds change tick
+            setMapViewState(prev => ({ ...prev }));
+            if (territoryPreviewEnabled) {
+                territoryPreview.refreshRoutePreview();
+            }
         }
     }, [territoryContext.lastUpdate, territoryPreviewEnabled, territoryPreview]);
 
-    // Render map controls
-    const renderMapControls = () => (
-        <MapControls
-            onZoomIn={handleZoomIn}
-            onZoomOut={handleZoomOut}
-            onFit={handleAutoFit}
-            onRecenter={handleAutoFit}
-            onToggleLayer={handleTerritoryPreviewToggle}
-            fullscreenEnabled={fullscreenEnabled}
-            isFullscreen={isFullscreen}
-            onToggleFullscreen={handleFullscreenToggle}
-        />
-    );
+
 
     // Calculate container styles
     const containerStyles = useMemo(() => {
@@ -472,6 +479,7 @@ export default function EnhancedActiveRouteMap({
                 className="w-full h-full"
                 zoomControl={false}
                 whenCreated={handleMapCreated}
+                preferCanvas={true}
             >
                 <MapPanes />
                 <MapResizeFix />
@@ -492,6 +500,22 @@ export default function EnhancedActiveRouteMap({
                         className="route-polyline"
                     />
                 )}
+
+                {/* Territory Overlay */}
+                {overlayMode !== 'hidden' && overlayFeatures.map(f => {
+                    const style = f.isMine ? { color: '#f97316', fillColor: '#f97316', weight: 2, fillOpacity: 0.18, lineJoin: 'round' as const } : { color: '#06b6d4', fillColor: '#06b6d4', weight: 1, fillOpacity: 0.1, lineJoin: 'round' as const };
+                    return (
+                        <Polygon key={f.id} positions={f.positions as any} pathOptions={style} pane="territories"
+                            eventHandlers={{
+                                mouseover: (e) => { (e.target as any).setStyle({ weight: (style.weight || 1) + 1 }); },
+                                mouseout: (e) => { (e.target as any).setStyle({ weight: style.weight || 1 }); },
+                                click: () => {
+                                    if (import.meta.env.MODE === 'development') console.log('Territory tapped', { id: f.id });
+                                }
+                            }}
+                        />
+                    );
+                })}
 
                 {/* Animated Current Position Marker */}
                 {currentLocation && (
@@ -524,8 +548,22 @@ export default function EnhancedActiveRouteMap({
                 {/* - GPSAccuracyIndicator */}
             </MapContainer>
 
-            {/* Map Controls */}
-            {renderMapControls()}
+
+
+            {/* Overlay status: loading / empty / error */}
+            {overlayMode !== 'hidden' && (
+                <div className="absolute bottom-3 left-3 z-[700]">
+                    {isOverlayLoading && (
+                        <Badge variant="secondary" className="text-xs">Loading territories…</Badge>
+                    )}
+                    {!isOverlayLoading && !isOverlayError && (overlayData?.territories?.length || 0) === 0 && (
+                        <Badge variant="outline" className="text-xs">No territories in view</Badge>
+                    )}
+                    {isOverlayError && (
+                        <Badge variant="destructive" className="text-xs">Territories unavailable</Badge>
+                    )}
+                </div>
+            )}
 
             {/* Territory Area Display */}
             {territoryPreviewEnabled && territoryPreviewVisible && (

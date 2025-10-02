@@ -9,7 +9,7 @@ import type {
   TerritoryPreview,
   UserTerritoryStatistics,
   GlobalTerritoryStatistics,
-  TerritoryLeaderboard,
+
   EnhancedTerritoryEligibilityValidation,
   TerritoryStatisticsResponse,
   TerritoryPreviewResponse,
@@ -42,6 +42,11 @@ export class TerritoryApiClient extends BaseApiClient {
     return this.request<TerritoryMapResponse>(`/territories/map${qs}`);
   }
 
+  async getTerritoriesMapSummary(zoomLevel: number) {
+    const qs = `?${new URLSearchParams({ zoom_level: String(zoomLevel) }).toString()}`;
+    return this.request<TerritoryMapResponse>(`/territories/map/summary${qs}`);
+  }
+
   async getUserTerritories(userId: string) {
     return this.request<Territory[]>(`/territories/user/${encodeURIComponent(userId)}`);
   }
@@ -50,9 +55,7 @@ export class TerritoryApiClient extends BaseApiClient {
     return this.request<Territory>(`/territories/${encodeURIComponent(territoryId)}`);
   }
 
-  async getContestedTerritories() {
-    return this.request<Territory[]>(`/territories/contested`);
-  }
+  // contested removed: territories are exclusively owned
 
   async getRouteCreatedTerritories(params?: {
     claiming_method?: string;
@@ -99,35 +102,7 @@ export class TerritoryApiClient extends BaseApiClient {
     return this.request<TerritoryStatisticsResponse>(`/territories/stats/user/${encodeURIComponent(userId)}`);
   }
 
-  // Territory Leaderboard
-  async getTerritoryLeaderboard(
-    metric: string = "total_area",
-    limit: number = 50,
-    offset: number = 0
-  ) {
-    const params = new URLSearchParams({
-      metric,
-      limit: limit.toString(),
-      offset: offset.toString()
-    });
-    return this.request<TerritoryLeaderboard>(`/territories/leaderboard?${params}`);
-  }
 
-  async getLeaderboardByArea(limit: number = 50, offset: number = 0) {
-    return this.getTerritoryLeaderboard("total_area", limit, offset);
-  }
-
-  async getLeaderboardByCount(limit: number = 50, offset: number = 0) {
-    return this.getTerritoryLeaderboard("territory_count", limit, offset);
-  }
-
-  async getLeaderboardByActivity(limit: number = 50, offset: number = 0) {
-    return this.getTerritoryLeaderboard("recent_activity", limit, offset);
-  }
-
-  async getLeaderboardByAverageArea(limit: number = 50, offset: number = 0) {
-    return this.getTerritoryLeaderboard("average_area", limit, offset);
-  }
 
   // Territory Validation
   async validateTerritoryClaimFromRoute(routeId: string, boundaryCoordinates: GeoPoint[]) {

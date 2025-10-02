@@ -152,7 +152,7 @@ export default function LiveRouteTracker({
         if (!activeRoute?.id) return;
 
         const unsubscribe = onRouteStatsUpdated?.((data) => {
-            console.log('Received route stats update:', data);
+                        if (import.meta.env.MODE === 'development') console.log('Received route stats update:', data);
             // The stats are already updated in routeData by the WebSocket hook
         });
 
@@ -749,7 +749,7 @@ export default function LiveRouteTracker({
                     territoryPreviewEnabled={territoryPreviewEnabled}
                     onTerritoryPreviewClick={(preview) => {
                         // Handle territory preview click - could show details modal
-                        console.log('Territory preview clicked:', preview);
+                        if (import.meta.env.MODE === 'development') console.log('Territory preview clicked:', preview);
                     }}
                 />
             )}
@@ -766,6 +766,7 @@ export default function LiveRouteTracker({
                 isCompleting={isCompleting}
                 completionResult={completionResult}
                 completionError={completionError}
+                coordinates={activeRoute?.coordinates || []}
             />
         </div>
     );

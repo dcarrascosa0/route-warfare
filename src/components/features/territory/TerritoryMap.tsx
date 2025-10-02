@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback } from "react";
-import { MapContainer, TileLayer, Polygon, Popup, useMap } from "react-leaflet";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { MapContainer, TileLayer, Polygon, Popup, useMap, useMapEvents } from "react-leaflet";
 import { LatLngBounds, LatLng } from "leaflet";
 import { Card, CardContent } from "@/components/ui/card";
-import { MapControls } from "@/components/common/MapControls";
+
 import { MapLegend } from "@/components/common/MapLegend";
 import { TerritoryHoverCard } from "@/components/common/TerritoryHoverCard";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +43,9 @@ interface TerritoryMapProps {
     filterBy?: string;
     searchTerm?: string;
     className?: string;
+    userLocation?: { lat: number; lng: number };
+    showPlanRoute?: boolean;
+    onSearchSelect?: (territory: Territory) => void;
 }
 
 // Enhanced territory styling with glass morphism and futuristic colors
@@ -78,27 +81,85 @@ const getTerritoryStyle = (territory: Territory, isSelected: boolean, isHovered:
     };
 };
 
-// Component to fit map bounds to territories
-const FitBounds = ({ territories }: { territories: Territory[] }) => {
+// Component to fit map bounds to territories with smart default camera
+const FitBounds = ({ territories, userTerritories }: { territories: Territory[]; userTerritories: Territory[] }) => {
     const map = useMap();
+    const [hasFitBounds, setHasFitBounds] = useState(false);
+
+    // Memoize the target territory calculation to prevent infinite re-renders
+    const targetTerritory = useMemo(() => {
+        if (userTerritories.length === 0) return null;
+
+        // Find most recent claim (assuming claimed_at is available)
+        const sortedByDate = [...userTerritories].sort((a, b) => 
+            new Date(b.claimed_at).getTime() - new Date(a.claimed_at).getTime()
+        );
+        let target = sortedByDate[0];
+        
+        // If no recent claim, use largest territory
+        if (!target) {
+            const sortedByArea = [...userTerritories].sort((a, b) => b.area_square_meters - a.area_square_meters);
+            target = sortedByArea[0];
+        }
+        
+        return target;
+    }, [userTerritories]);
+
+    // Memoize territory IDs to prevent unnecessary re-renders
+    const territoryIds = useMemo(() => 
+        territories.map(t => t.id).sort().join(','), 
+        [territories]
+    );
 
     useEffect(() => {
-        if (territories.length === 0) return;
+        if (territories.length === 0 || hasFitBounds) return;
 
-        const bounds = new LatLngBounds([]);
-        territories.forEach(territory => {
-            if (territory.boundary_coordinates) {
-                territory.boundary_coordinates.forEach(coord => {
-                    bounds.extend(new LatLng(coord.latitude, coord.longitude));
-                });
+        if (targetTerritory && targetTerritory.boundary_coordinates.length > 0) {
+            // Focus on specific territory
+            const bounds = new LatLngBounds([]);
+            targetTerritory.boundary_coordinates.forEach(coord => {
+                bounds.extend(new LatLng(coord.latitude, coord.longitude));
+            });
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [50, 50] });
+                setHasFitBounds(true);
             }
-        });
+        } else {
+            // Fallback to all territories
+            const bounds = new LatLngBounds([]);
+            territories.forEach(territory => {
+                if (territory.boundary_coordinates) {
+                    territory.boundary_coordinates.forEach(coord => {
+                        bounds.extend(new LatLng(coord.latitude, coord.longitude));
+                    });
+                }
+            });
 
-        if (bounds.isValid()) {
-            map.fitBounds(bounds, { padding: [20, 20] });
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [20, 20] });
+                setHasFitBounds(true);
+            }
         }
-    }, [territories, map]);
+    }, [territoryIds, targetTerritory, map, hasFitBounds]);
 
+    // Reset hasFitBounds when territories change significantly
+    useEffect(() => {
+        setHasFitBounds(false);
+    }, [territoryIds]);
+
+    return null;
+};
+
+// Component to track map viewport for performance optimization
+const ViewportTracker = ({ onViewportChange }: { onViewportChange: (bounds: any, zoom: number) => void }) => {
+    const map = useMapEvents({
+        moveend: () => {
+            onViewportChange(map.getBounds(), map.getZoom());
+        },
+        zoomend: () => {
+            onViewportChange(map.getBounds(), map.getZoom());
+        }
+    });
     return null;
 };
 
@@ -181,7 +242,10 @@ export const TerritoryMap = ({
     showOwnershipIndicators = true,
     filterBy = "all",
     searchTerm = "",
-    className
+    className,
+    userLocation,
+    showPlanRoute = false,
+    onSearchSelect
 }: TerritoryMapProps) => {
     const [selectedTerritory, setSelectedTerritory] = useState<Territory | null>(null);
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -190,6 +254,7 @@ export const TerritoryMap = ({
     const [mapRefreshKey, setMapRefreshKey] = useState(0);
     const [hoveredTerritoryId, setHoveredTerritoryId] = useState<string | null>(null);
     const [showGrid, setShowGrid] = useState(false);
+    const [viewport, setViewport] = useState<{ bounds: any | null; zoom: number }>({ bounds: null, zoom: 13 });
 
 
 
@@ -201,7 +266,7 @@ export const TerritoryMap = ({
         }
         if (data.affected_area) {
             // Could implement more granular updates based on affected area
-            console.log('Territory map update in area:', data.affected_area);
+            if (import.meta.env.MODE === 'development') console.log('Territory map update in area:', data.affected_area);
         }
     }, []);
 
@@ -240,20 +305,66 @@ export const TerritoryMap = ({
             if (!matchesSearch) return false;
         }
 
-        // Category filter
+        // Category filter - updated to match new filter options
         switch (filterBy) {
             case "mine":
                 return territory.is_mine;
-            case "contested":
-                return false;
+            case "others":
+                return !territory.is_mine;
             case "nearby":
-                // TODO: Implement nearby logic based on user location
-                return true;
+                if (!userLocation) return false;
+                const first = territory.boundary_coordinates?.[0];
+                if (!first) return false;
+                const dLat = (first.latitude - userLocation.lat);
+                const dLng = (first.longitude - userLocation.lng);
+                const approxMeters = Math.sqrt(dLat*dLat + dLng*dLng) * 111000;
+                return approxMeters <= 5000;
             case "all":
             default:
                 return true;
         }
     });
+
+    // Performance optimization: only render polygons in viewport when zoom >= 14
+    const visibleTerritories = useMemo(() => {
+        if (!viewport.bounds || viewport.zoom < 14) {
+            return filteredTerritories;
+        }
+
+        return filteredTerritories.filter(territory => {
+            // Check if territory intersects with viewport
+            if (!territory.boundary_coordinates || territory.boundary_coordinates.length === 0) {
+                return false;
+            }
+
+            // Simple bounding box check for performance
+            const territoryBounds = new LatLngBounds([]);
+            territory.boundary_coordinates.forEach(coord => {
+                territoryBounds.extend(new LatLng(coord.latitude, coord.longitude));
+            });
+
+            return viewport.bounds!.intersects(territoryBounds);
+        });
+    }, [filteredTerritories, viewport]);
+
+    // Memoize GeoJSON layers by owner for caching
+    const territoryLayers = useMemo(() => {
+        return visibleTerritories.map(territory => ({
+            ...territory,
+            layerKey: `${territory.id}-${territory.owner_id}-${territory.is_mine}`
+        }));
+    }, [visibleTerritories]);
+
+    // Handle viewport changes for performance optimization
+    const handleViewportChange = useCallback((bounds: any, zoom: number) => {
+        setViewport({ bounds, zoom });
+    }, []);
+
+    // Memoize user territories to prevent FitBounds re-renders
+    const memoizedUserTerritories = useMemo(() => 
+        activeTerritories.filter(t => t.is_mine), 
+        [activeTerritories]
+    );
 
 
 
@@ -272,8 +383,7 @@ export const TerritoryMap = ({
     const defaultCenter: [number, number] = [40.7128, -74.0060]; // New York City
     const defaultZoom = 13;
 
-    // Determine if we should show the empty state overlay
-    const showEmptyState = filteredTerritories.length === 0;
+
 
     return (
         <div className={cn("relative h-full w-full territory-map-container", className)}>
@@ -292,13 +402,19 @@ export const TerritoryMap = ({
                 />
                 <MapResizeFix />
 
+                {/* Viewport tracker for performance optimization */}
+                <ViewportTracker onViewportChange={handleViewportChange} />
+
                 {/* Fit bounds to territories only if we have territories */}
                 {filteredTerritories.length > 0 && (
-                    <FitBounds territories={filteredTerritories} />
+                    <FitBounds 
+                        territories={filteredTerritories} 
+                        userTerritories={memoizedUserTerritories}
+                    />
                 )}
 
-                {/* Render enhanced territory polygons */}
-                {filteredTerritories.map(territory => {
+                {/* Render enhanced territory polygons with performance optimization */}
+                {territoryLayers.map(territory => {
                     const isSelected = territory.id === selectedTerritoryId || territory.id === selectedTerritory?.id;
                     const isHovered = hoveredTerritoryId === territory.id;
                     const positionsSingle = (territory.boundary_coordinates || []).map(coord => [coord.latitude, coord.longitude] as [number, number]);
@@ -321,7 +437,7 @@ export const TerritoryMap = ({
 
                     return (
                         <Polygon
-                            key={territory.id}
+                            key={territory.layerKey}
                             positions={(positionsWithHoles.length > 0 ? positionsWithHoles : positionsSingle) as any}
                             pathOptions={territoryStyle}
                             eventHandlers={{
@@ -331,25 +447,29 @@ export const TerritoryMap = ({
                                 mouseout: () => setHoveredTerritoryId(null)
                             }}
                         >
-                            <Popup className="territory-popup"><TerritoryHoverCard territory={{
-                                id: territory.id,
-                                name: territory.name,
-                                owner_name: territory.owner_name,
-                                area_square_meters: territory.area_square_meters,
-                                
-                            }} onViewDetails={() => handleTerritoryDoubleClick(territory)} /></Popup>
+                            <Popup className="territory-popup">
+                                <TerritoryHoverCard 
+                                    territory={{
+                                        id: territory.id,
+                                        name: territory.name,
+                                        owner_name: territory.owner_name,
+                                        area_square_meters: territory.area_square_meters,
+                                    }} 
+                                    onViewDetails={() => handleTerritoryDoubleClick(territory)} 
+                                />
+                            </Popup>
                         </Polygon>
                     );
                 })}
             </MapContainer>
 
             {/* Enhanced Territory Legend */}
-            {showOwnershipIndicators && !showEmptyState && (
+            {showOwnershipIndicators && filteredTerritories.length > 0 && (
                 <div className="absolute top-4 right-4 z-[1000]"><MapLegend /></div>
             )}
 
             {/* Enhanced empty state overlay */}
-            {showEmptyState && (
+            {filteredTerritories.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center z-[500] p-6">
                     <EmptyState
                         Icon={MapPin}
@@ -361,8 +481,7 @@ export const TerritoryMap = ({
                 </div>
             )}
 
-            {/* Shared Map Controls */}
-            <MapControls onFit={() => setMapRefreshKey(prev => prev + 1)} onToggleGrid={() => setShowGrid(v => !v)} />
+
 
             {/* Zone Drawer (right-side) */}
             <ZoneDrawer

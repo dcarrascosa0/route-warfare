@@ -13,6 +13,7 @@ export interface UserTerritoryStatistics {
   average_area_km2: number;
   first_claim_date?: string;
   latest_claim_date?: string;
+  claims_last_7d: number;
   // contested removed
   auto_claimed_territories: number;
   manual_claimed_territories: number;
@@ -249,7 +250,7 @@ export interface ClaimTerritoryRequest {
 }
 
 export interface TerritoryFilter {
-  status?: "claimed" | "contested" | "neutral" | "all";
+  status?: "claimed" | "neutral" | "all";
   owner?: "user" | "others" | "all";
 }
 
@@ -262,7 +263,7 @@ export interface MapBounds {
 }
 
 export interface TerritoryEvent {
-  type: "territory_claimed" | "territory_attacked" | "territory_lost" | "territory_contested";
+  type: "territory_claimed" | "territory_attacked" | "territory_lost";
   territory_id: string;
   territory: Territory;
   timestamp: string;

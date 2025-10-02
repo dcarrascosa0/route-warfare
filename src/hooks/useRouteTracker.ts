@@ -98,14 +98,14 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
   const flushBatch = useCallback(async () => {
     const currentUserId = userIdRef.current;
     const currentRouteId = routeIdRef.current;
-    console.log('flushBatch called - userId:', currentUserId, 'routeId:', currentRouteId, 'batchSize:', batchRef.current.length);
+    if (import.meta.env.MODE === 'development') console.log('flushBatch called - userId:', currentUserId, 'routeId:', currentRouteId, 'batchSize:', batchRef.current.length);
     
     if (!currentUserId || !currentRouteId) {
-      console.log('Cannot flush - missing userId or routeId');
+      if (import.meta.env.MODE === 'development') console.log('Cannot flush - missing userId or routeId');
       return;
     }
     if (batchRef.current.length === 0) {
-      console.log('Cannot flush - empty batch');
+      if (import.meta.env.MODE === 'development') console.log('Cannot flush - empty batch');
       return;
     }
     
@@ -114,11 +114,11 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
     batchRef.current = [];
     lastFlushRef.current = Date.now();
     
-    console.log('Sending coordinates to backend:', toSend);
+    if (import.meta.env.MODE === 'development') console.log('Sending coordinates to backend:', toSend);
     
     try {
       const result = await GatewayAPI.addCoordinates(currentRouteId, currentUserId, toSend);
-      console.log(`Successfully flushed ${toSend.length} coordinates to backend:`, result);
+      if (import.meta.env.MODE === 'development') console.log(`Successfully flushed ${toSend.length} coordinates to backend:`, result);
 
       if (!result.ok) {
         // Handle specific API errors
@@ -156,12 +156,12 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
 
       // Re-queue failed coordinates to attempt on next flush
       batchRef.current = [...toSend, ...batchRef.current];
-      console.log('Re-queued', toSend.length, 'coordinates after failure');
+      if (import.meta.env.MODE === 'development') console.log('Re-queued', toSend.length, 'coordinates after failure');
     }
   }, []);
 
   const start = useCallback(async (opts?: StartOptions) => {
-    console.log('Starting route tracking with userId:', userId, 'opts:', opts);
+    if (import.meta.env.MODE === 'development') console.log('Starting route tracking with userId:', userId, 'opts:', opts);
     setError(null);
     if (!userId) {
       setError("You must be signed in to start a route");
@@ -171,19 +171,19 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
       let haveRoute = false;
       // Try resume existing active route
       const active = await GatewayAPI.getActiveRoute(userId);
-      console.log('Checked for active route:', active);
+      if (import.meta.env.MODE === 'development') console.log('Checked for active route:', active);
       if (active.ok && (active.data as any)?.id) {
         const ar = (active.data as any);
         setRouteId(String(ar.id));
         setTrackedCoordinates(ar.coordinates || []);
         haveRoute = true;
-        console.log('Resumed existing route:', ar.id);
+        if (import.meta.env.MODE === 'development') console.log('Resumed existing route:', ar.id);
       }
 
       if (!haveRoute) {
-        console.log('Creating new route...');
+        if (import.meta.env.MODE === 'development') console.log('Creating new route...');
         const started = await GatewayAPI.startRoute(userId, { name: opts?.name, description: opts?.description });
-        console.log('Start route response:', started);
+        if (import.meta.env.MODE === 'development') console.log('Start route response:', started);
         if (!started.ok || !(started.data as any)?.id) {
           const errorMsg = `Failed to start route${started.status === 401 ? ": unauthorized" : ""}`;
           setError(errorMsg);
@@ -191,11 +191,11 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
           return false;
         }
         setRouteId(String((started.data as any).id));
-        console.log('Created new route:', (started.data as any).id);
+        if (import.meta.env.MODE === 'development') console.log('Created new route:', (started.data as any).id);
       }
       setStartedAt(Date.now());
       setIsTracking(true);
-      console.log('Route tracking started, isTracking set to true');
+      if (import.meta.env.MODE === 'development') console.log('Route tracking started, isTracking set to true');
 
       // start timers
       const startTime = Date.now();
@@ -234,7 +234,7 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
 
       // start real GPS
       if ("geolocation" in navigator) {
-        console.log('Setting up GPS tracking...');
+        if (import.meta.env.MODE === 'development') console.log('Setting up GPS tracking...');
         
         const handleSuccess = (pos: GeolocationPosition) => {
           setCurrentLocation(pos);
@@ -248,7 +248,7 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
             timestamp: new Date().toISOString(),
           };
           
-          console.log('Received GPS coordinate:', c);
+          if (import.meta.env.MODE === 'development') console.log('Received GPS coordinate:', c);
           
           if (!isValidCoordinate(c)) {
             console.warn('Invalid GPS coordinate received:', c);
@@ -263,16 +263,16 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
             );
             
             if (distance < 1.0) {
-              console.log('Skipping coordinate - too close to previous:', distance.toFixed(2) + 'm');
+              if (import.meta.env.MODE === 'development') console.log('Skipping coordinate - too close to previous:', distance.toFixed(2) + 'm');
               return;
             }
           }
           
-          console.log('Adding coordinate to batch, queue size:', batchRef.current.length + 1);
+          if (import.meta.env.MODE === 'development') console.log('Adding coordinate to batch, queue size:', batchRef.current.length + 1);
           batchRef.current.push(c);
           setTrackedCoordinates((prev) => [...prev, c]);
           if (batchRef.current.length >= BATCH_SIZE) {
-            console.log('Batch full, flushing coordinates');
+            if (import.meta.env.MODE === 'development') console.log('Batch full, flushing coordinates');
             flushBatch();
           }
         };
@@ -387,7 +387,7 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
         };
 
         if (!navigator.onLine) {
-            console.log("Offline: Queuing route completion for background sync.");
+            if (import.meta.env.MODE === 'development') console.log("Offline: Queuing route completion for background sync.");
             const { getOfflineSyncManager } = await import('@/lib/network/offline-sync');
             const syncManager = getOfflineSyncManager();
             if (syncManager) {
@@ -484,16 +484,16 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
 
       // Delete the route from backend if we have one
       if (userId && currentRouteId) {
-        console.log("Deleting route from backend:", currentRouteId);
+        if (import.meta.env.MODE === 'development') console.log("Deleting route from backend:", currentRouteId);
         const result = await GatewayAPI.deleteRoute(currentRouteId, userId);
         if (!result.ok) {
           console.error("Failed to delete route:", result);
           throw new Error("Failed to delete route from server");
         }
-        console.log("Route deleted successfully from backend");
+        if (import.meta.env.MODE === 'development') console.log("Route deleted successfully from backend");
       }
       
-      console.log("Route cancelled and deleted successfully");
+      if (import.meta.env.MODE === 'development') console.log("Route cancelled and deleted successfully");
       return true;
     } catch (e: any) {
       console.error("Route cancellation error:", e);
@@ -544,7 +544,7 @@ export function useRouteTracker(userId: string | null | undefined): UseRouteTrac
     // Clear batch (don't flush since route is already completed)
     batchRef.current = [];
     
-    console.log("Route tracker state cleaned up without API call");
+    if (import.meta.env.MODE === 'development') console.log("Route tracker state cleaned up without API call");
   }, []);
 
   useEffect(() => {

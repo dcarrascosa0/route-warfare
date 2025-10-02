@@ -42,6 +42,7 @@ const TerritoryDetailsModal = ({
   onClose, 
   territory, 
   onNavigateToRoutes,
+  onNavigateToRoute,
 }: TerritoryDetailsModalProps) => {
   const [isRouteMapOpen, setIsRouteMapOpen] = useState(false);
   
@@ -59,7 +60,6 @@ const TerritoryDetailsModal = ({
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'claimed': return <Shield className="w-5 h-5 text-green-500" />;
-      case 'contested': return <Swords className="w-5 h-5 text-red-500" />;
       case 'neutral': return <MapPin className="w-5 h-5 text-gray-500" />;
       default: return <MapPin className="w-5 h-5 text-muted-foreground" />;
     }
@@ -79,13 +79,6 @@ const TerritoryDetailsModal = ({
       }
     };
 
-    if (status === 'contested') {
-      return (
-        <Button onClick={() => handleAction("resolve_conflict")} className="w-full">
-          Resolve Conflict
-        </Button>
-      );
-    }
     return (
       <Button onClick={() => handleAction("view_routes")} className="w-full">
         View My Routes
@@ -162,7 +155,6 @@ const TerritoryDetailsModal = ({
             <Badge className={`capitalize ${
               territory.status === 'claimed' ? 
                 (isOwned ? 'bg-green-500/20 text-green-500' : 'bg-destructive/20 text-destructive') :
-              territory.status === 'contested' ? 'bg-red-500/20 text-red-500' :
               'bg-gray-500/20 text-gray-500'
             }`}>
               {territory.status}
@@ -226,26 +218,7 @@ const TerritoryDetailsModal = ({
             )}
           </div>
 
-          {/* Contested Territory Info */}
-          {territory.status === 'contested' && territory.contested_by && (
-            <Card className="bg-red-500/10 border-red-500/20">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Swords className="w-5 h-5 text-red-500" />
-                  <span className="font-medium text-red-500">Active Battle</span>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">
-                    This territory is being contested by {territory.contested_by.length} player{territory.contested_by.length > 1 ? 's' : ''}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-red-500" />
-                    <span className="text-sm font-medium">Battle intensity: High</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* Contested removed: territories are exclusively owned */}
 
           {/* Action Button */}
           <div className="pt-2">

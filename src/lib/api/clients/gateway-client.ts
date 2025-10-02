@@ -8,6 +8,8 @@ import { TerritoryApiClient } from './territory-client';
 import { UserApiClient } from './user-client';
 import { LeaderboardApiClient } from './leaderboard-client';
 import { NotificationApiClient } from './notification-client';
+import { GamificationApiClient } from './gamification-client';
+import { AchievementsApiClient } from './achievements-client';
 
 /**
  * Combined Gateway API client that provides backward compatibility
@@ -20,6 +22,8 @@ class GatewayApiClient {
     public users = new UserApiClient();
     public leaderboard = new LeaderboardApiClient();
     public notifications = new NotificationApiClient();
+    public gamification = new GamificationApiClient();
+    public achievements = new AchievementsApiClient();
 
     // Auth convenience methods
     async login(email: string, password: string) {
@@ -80,7 +84,7 @@ class GatewayApiClient {
     }
 
     async userAchievements(userId: string) {
-        return this.users.getUserAchievements(userId);
+        return this.achievements.getUserAchievements(userId, false);
     }
 
     async achievementProgress(userId: string, achievementId: string) {
@@ -157,9 +161,7 @@ class GatewayApiClient {
         return this.territories.getTerritory(territoryId);
     }
 
-    async getContestedTerritories() {
-        return this.territories.getContestedTerritories();
-    }
+    // contested removed
 
     async getRouteCreatedTerritories(params?: {
         claiming_method?: string;
@@ -192,26 +194,9 @@ class GatewayApiClient {
         return this.territories.getTerritoryStatistics(userId);
     }
 
-    // Territory Leaderboard convenience methods
-    async getTerritoryLeaderboard(metric: string = "total_area", limit: number = 50, offset: number = 0) {
-        return this.territories.getTerritoryLeaderboard(metric, limit, offset);
-    }
 
-    async getLeaderboardByArea(limit: number = 50, offset: number = 0) {
-        return this.territories.getLeaderboardByArea(limit, offset);
-    }
 
-    async getLeaderboardByCount(limit: number = 50, offset: number = 0) {
-        return this.territories.getLeaderboardByCount(limit, offset);
-    }
 
-    async getLeaderboardByActivity(limit: number = 50, offset: number = 0) {
-        return this.territories.getLeaderboardByActivity(limit, offset);
-    }
-
-    async getLeaderboardByAverageArea(limit: number = 50, offset: number = 0) {
-        return this.territories.getLeaderboardByAverageArea(limit, offset);
-    }
 
     // Territory Preview convenience methods
     async calculateTerritoryPreview(coordinates: Array<{ longitude: number; latitude: number }>) {
@@ -240,9 +225,7 @@ class GatewayApiClient {
         return this.leaderboard.getLeaderboardRoutes(period, start, limit);
     }
 
-    async leaderboardWinRate(period: string = "ALL_TIME", start = 0, limit = 50) {
-        return this.leaderboard.getLeaderboardWinRate(period, start, limit);
-    }
+
 
     async leaderboardStats(category: string) {
         return this.leaderboard.getLeaderboardStats(category);
@@ -254,6 +237,27 @@ class GatewayApiClient {
 
     async getTotalPlayers() {
         return this.leaderboard.getTotalPlayers();
+    }
+
+    // Gamification leaderboard methods
+    async leaderboardXP(period: string = "ALL_TIME", start = 0, limit = 50) {
+        return this.leaderboard.getXPLeaderboard(period, start, limit);
+    }
+
+    async leaderboardLevel(period: string = "ALL_TIME", start = 0, limit = 50) {
+        return this.leaderboard.getLevelLeaderboard(period, start, limit);
+    }
+
+    async leaderboardAchievements(period: string = "ALL_TIME", start = 0, limit = 50) {
+        return this.leaderboard.getAchievementsLeaderboard(period, start, limit);
+    }
+
+    async leaderboardStreak(period: string = "ALL_TIME", start = 0, limit = 50) {
+        return this.leaderboard.getStreakLeaderboard(period, start, limit);
+    }
+
+    async leaderboardDistance(period: string = "ALL_TIME", start = 0, limit = 50) {
+        return this.leaderboard.getDistanceLeaderboard(period, start, limit);
     }
 
     // Notification convenience methods

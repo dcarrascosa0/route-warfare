@@ -14,7 +14,7 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const params = new URLSearchParams(location.search);
-  const redirectTo = params.get("redirect") || "/dashboard";
+  const redirectTo = params.get("redirect") || "/routes";
   const message = params.get("message");
 
   // Redirect if already authenticated

@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { WebSocketManager, WebSocketMessage, ConnectionState, createWebSocketManager } from '../lib/websocket/websocket-manager';
-import { useAuth } from './useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 import { TokenManager } from '../contexts/AuthContext';
 import { useGlobalControls } from '@/contexts/GlobalControlsContext';
 
@@ -327,11 +327,11 @@ export const useRealTimeRouteTracking = (routeId?: string) => {
   useEffect(() => {
     if (!routeId || !wsHook.wsManager) return;
 
-    console.log('Subscribing to route updates for:', routeId);
+    if (import.meta.env.MODE === 'development') console.log('Subscribing to route updates for:', routeId);
     wsHook.subscribeToEvents(['coordinate_added', 'route_stats_updated'], undefined, [routeId]);
 
     return () => {
-      console.log('Unsubscribing from route updates for:', routeId);
+      if (import.meta.env.MODE === 'development') console.log('Unsubscribing from route updates for:', routeId);
       wsHook.unsubscribeFromEvents(['coordinate_added', 'route_stats_updated'], undefined, [routeId]);
     };
   }, [routeId, wsHook.wsManager, wsHook.subscribeToEvents, wsHook.unsubscribeFromEvents]);

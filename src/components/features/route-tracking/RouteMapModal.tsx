@@ -23,12 +23,7 @@ import {
   TrendingUp,
   Info,
   Shield,
-  ZoomIn,
-  ZoomOut,
-  RotateCcw,
-  Eye,
-  EyeOff,
-  Settings,
+
   Share2,
   Download,
   Minimize
@@ -37,6 +32,7 @@ import { RouteInfo } from "@/types/api";
 import { MapContainer, TileLayer, Polyline, Marker, Popup, Polygon, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "../territory/TerritoryMap.css";
 import { useResponsive } from "@/hooks/useResponsive";
 
 // Fix default Leaflet marker icons for Vite bundling
@@ -110,8 +106,6 @@ const RouteMapModal: React.FC<RouteMapModalProps> = ({
 }) => {
   const { isMobile } = useResponsive();
   const mapRef = useRef<any>(null);
-  const [showControls, setShowControls] = useState(true);
-  const [showLayers, setShowLayers] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Calculate route statistics
@@ -215,25 +209,6 @@ const RouteMapModal: React.FC<RouteMapModalProps> = ({
     mapRef.current = map;
   }, []);
 
-  const handleZoomIn = useCallback(() => {
-    if (mapRef.current) {
-      mapRef.current.zoomIn();
-    }
-  }, []);
-
-  const handleZoomOut = useCallback(() => {
-    if (mapRef.current) {
-      mapRef.current.zoomOut();
-    }
-  }, []);
-
-  const handleReset = useCallback(() => {
-    if (mapRef.current && coordinates.length > 0) {
-      const bounds = L.latLngBounds(routePath);
-      mapRef.current.fitBounds(bounds, { padding: [20, 20] });
-    }
-  }, [routePath, coordinates.length]);
-
   // Do not render when modal is closed or route data is not provided
   if (!isOpen || !route) {
     return null;
@@ -289,40 +264,43 @@ const RouteMapModal: React.FC<RouteMapModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className={`max-w-6xl ${isFullscreen ? 'h-[90vh]' : 'h-[80vh]'} p-0`}>
-        <DialogHeader className="p-4 pb-2">
-          <DialogTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Route className="w-5 h-5" />
-              {route.name || `Route ${route.id.slice(0, 8)}`}
-              <Badge className={statusInfo.bgColor} variant="secondary">
-                <StatusIcon className={`w-3 h-3 mr-1 ${statusInfo.color}`} />
-                {statusInfo.label}
-              </Badge>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsFullscreen(!isFullscreen)}
-              >
-                {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-              </Button>
-            </div>
-          </DialogTitle>
-        </DialogHeader>
+      <DialogContent className={`max-w-6xl ${isFullscreen ? 'h-[90vh]' : 'h-[80vh]'} p-0 flex flex-col`}>
+        {/* Header overlay */}
+        <div className="absolute top-4 left-4 right-4 z-[1000] flex items-center justify-between">
+          <div className="flex items-center gap-2 bg-background/95 backdrop-blur-sm rounded-lg px-3 py-2">
+            <Route className="w-5 h-5" />
+            <span className="font-semibold">{route.name || `Route ${route.id.slice(0, 8)}`}</span>
+            <Badge className={statusInfo.bgColor} variant="secondary">
+              <StatusIcon className={`w-3 h-3 mr-1 ${statusInfo.color}`} />
+              {statusInfo.label}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              className="bg-background/95 backdrop-blur-sm"
+            >
+              {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+            </Button>
+          </div>
+        </div>
 
-        <div className="flex-1 relative">
+        <div className="flex-1 relative h-full">
           {/* Map */}
           <MapContainer
             center={center}
             zoom={13}
             style={{ height: '100%', width: '100%' }}
-            className="rounded-lg"
+            className="h-full w-full rw-map territory-map-container"
+            zoomControl={false}
+            attributionControl={false}
           >
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>'
+              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              className="tw-road-tint"
             />
 
             <MapEventHandler coordinates={coordinates} onMapReady={handleMapReady} />
@@ -332,9 +310,10 @@ const RouteMapModal: React.FC<RouteMapModalProps> = ({
               <Polyline
                 positions={routePath}
                 pathOptions={{
-                  color: route.is_closed ? '#22c55e' : '#3b82f6',
+                  color: '#f97316', // Orange like territory theme
                   weight: 4,
-                  opacity: 0.8
+                  opacity: 0.8,
+                  className: 'route-completion-line'
                 }}
               />
             )}
@@ -377,11 +356,12 @@ const RouteMapModal: React.FC<RouteMapModalProps> = ({
               <Polygon
                 positions={routePath}
                 pathOptions={{
-                  color: '#8b5cf6',
-                  fillColor: '#8b5cf6',
+                  color: '#f97316',
+                  fillColor: '#f97316',
                   fillOpacity: 0.2,
                   weight: 2,
-                  dashArray: '5, 5'
+                  opacity: 1,
+                  className: 'territory-polygon territory-owned'
                 }}
               >
                 <Popup>
@@ -402,31 +382,11 @@ const RouteMapModal: React.FC<RouteMapModalProps> = ({
             )}
           </MapContainer>
 
-          {/* Map controls */}
-          {showControls && (
-            <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2">
-              <Button variant="outline" size="sm" onClick={handleZoomIn}>
-                <ZoomIn className="w-4 h-4" />
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleZoomOut}>
-                <ZoomOut className="w-4 h-4" />
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleReset}>
-                <RotateCcw className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowControls(!showControls)}
-              >
-                {showControls ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </Button>
-            </div>
-          )}
+
 
           {/* Route statistics */}
           {showStatistics && (
-            <div className="absolute top-4 left-4 z-[1000] max-w-sm">
+            <div className="absolute top-20 left-4 z-[1000] max-w-sm">
               <Card className="bg-background/95 backdrop-blur-sm">
                 <CardContent className="p-3">
                   <div className="grid grid-cols-2 gap-3 text-xs">

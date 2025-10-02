@@ -36,7 +36,7 @@ export const LEADERBOARD_CATEGORIES = {
   TERRITORY: 'territory',
   ROUTES: 'routes',
   DISTANCE: 'distance',
-  WIN_RATE: 'winrate',
+
 } as const;
 
 export const NOTIFICATION_TYPES = {

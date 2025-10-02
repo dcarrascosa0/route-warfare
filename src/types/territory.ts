@@ -7,7 +7,7 @@ export interface Territory {
   route_id: string;
   name?: string;
   description?: string;
-  status: 'active' | 'contested' | 'abandoned';
+  status: 'claimed' | 'neutral';
   created_at: string;
   updated_at: string;
   boundary_coordinates: Array<{ latitude: number; longitude: number }>;
@@ -18,7 +18,7 @@ export interface Territory {
   metadata?: Record<string, any>;
   // Additional properties used by components
   is_owned?: boolean;
-  is_contested?: boolean;
+  // contested removed in exclusive model
   owner_user_id?: string;
   owner_username?: string;
   claimed_at?: string;
@@ -27,7 +27,7 @@ export interface Territory {
   conflicts?: any[];
   claim_history?: any[];
   last_activity?: string;
-  contest_count?: number;
+  // contest_count removed in exclusive model
 }
 
 export interface TerritoryConflict {
@@ -77,7 +77,7 @@ export interface TerritoryClaimHistory {
 
 export interface TerritoryEvent {
   id: string;
-  type: 'claim' | 'conflict' | 'resolution' | 'transfer' | 'territory_claimed' | 'territory_attacked' | 'territory_contested' | 'territory_lost' | 'territory_ownership_changed' | 'territory_conflict_resolved';
+  type: 'claim' | 'conflict' | 'resolution' | 'transfer' | 'territory_claimed' | 'territory_attacked' | 'territory_lost' | 'territory_ownership_changed' | 'territory_conflict_resolved';
   territory_id: string;
   user_id: string;
   timestamp: string;
